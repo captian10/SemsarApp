@@ -1,0 +1,6 @@
+﻿# Ignore secrets / keys
+foodapp-7bfb0-firebase-adminsdk-*.json
+*.key
+.env
+.env.*
+node_modules
