@@ -1,11 +1,23 @@
-import Colors from "@constants/Colors";
+import Colors, { THEME } from "@constants/Colors";
+import { FONT } from "@/constants/Typography";
 import { FontAwesome } from "@expo/vector-icons";
 import { Link, Stack } from "expo-router";
 import { Pressable } from "react-native";
 
 export default function MenuStack() {
   return (
-    <Stack screenOptions={{}}>
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: THEME.white.DEFAULT },
+        headerShadowVisible: false,
+        headerTitleAlign: "center",
+        headerTitleStyle: {
+          fontFamily: FONT.bold, // ✅ Tajawal_700Bold
+          fontSize: 18,
+          color: THEME.dark[100],
+        },
+      }}
+    >
       <Stack.Screen
         name="index"
         options={{
@@ -26,8 +38,6 @@ export default function MenuStack() {
           ),
         }}
       />
-
-
     </Stack>
   );
 }

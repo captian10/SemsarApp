@@ -3,26 +3,38 @@ import { useAuth } from "@providers/AuthProvider";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InsertTables, UpdateTables } from "../../types/types";
 
-const handleError = (error: any) => {
-  if (error.message) {
-    throw new Error(error.message);
-  }
+const handleError = (error: any): never => {
+  console.log("[supabase error]", JSON.stringify(error, null, 2));
+  if (error?.message) throw new Error(error.message);
   throw new Error("Something went wrong");
 };
 
-export const useAdminOrderList = ({ archived = false }) => {
-  const statuses = archived ? ["Delivered"] : ["New", "Cooking", "Delivering"];
+// ✅ Admin status lists
+export const ADMIN_CURRENT_STATUSES = ["New", "Cooking", "Delivering"] as const;
+export const ADMIN_ARCHIVED_STATUSES = ["Delivered", "Canceled"] as const;
+
+// ✅ Admin select (join profiles) - NOW uses email instead of full_name
+export const ADMIN_ORDERS_SELECT = `
+  id, created_at, status, total, user_id,
+  profile:profiles!orders_user_id_fkey(email, phone, role)
+`;
+
+const MY_ORDERS_SELECT = `id, created_at, status, total, user_id`;
+
+export const useAdminOrderList = ({ archived = false }: { archived?: boolean }) => {
+  const statuses = archived ? ADMIN_ARCHIVED_STATUSES : ADMIN_CURRENT_STATUSES;
 
   return useQuery({
-    queryKey: ["orders", { archived }],
+    queryKey: ["admin-orders", { archived }],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("*")
-        .in("status", statuses)
+        .select(ADMIN_ORDERS_SELECT)
+        .in("status", [...statuses])
         .order("created_at", { ascending: false });
+
       if (error) handleError(error);
-      return data;
+      return data ?? [];
     },
     retry: 3,
     refetchOnWindowFocus: false,
@@ -31,20 +43,20 @@ export const useAdminOrderList = ({ archived = false }) => {
 
 export const useMyOrderList = () => {
   const { session } = useAuth();
-  const id = session?.user.id;
+  const userId = session?.user?.id;
 
   return useQuery({
-    queryKey: ["orders", { userId: id }],
+    queryKey: ["my-orders", { userId }],
+    enabled: !!userId,
     queryFn: async () => {
-      if (!id) return null;
-
       const { data, error } = await supabase
         .from("orders")
-        .select("*")
-        .eq("user_id", id)
+        .select(MY_ORDERS_SELECT)
+        .eq("user_id", userId as string)
         .order("created_at", { ascending: false });
+
       if (error) handleError(error);
-      return data;
+      return data ?? [];
     },
     retry: 3,
     refetchOnWindowFocus: false,
@@ -53,42 +65,67 @@ export const useMyOrderList = () => {
 
 export const useOrderDetails = (id: number) => {
   return useQuery({
-    queryKey: ["orders", id],
+    queryKey: ["order-details", id],
+    enabled: Number.isFinite(id) && id > 0,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("*, order_items(*, products(*))")
+        .select(
+          `
+          id, created_at, status, total, user_id,
+          profile:profiles!orders_user_id_fkey(email, phone, role),
+          order_items(
+            id, created_at, order_id, product_id, size, quantity, unit_price,
+            products(*)
+          )
+        `
+        )
         .eq("id", id)
         .single();
+
       if (error) handleError(error);
       return data;
     },
-    retry: 3, // Automatically retry failed requests up to 3 times
-    refetchOnWindowFocus: false, // Prevent refetch when window is focused
+    retry: 3,
+    refetchOnWindowFocus: false,
   });
 };
 
 export const useInsertOrder = () => {
   const queryClient = useQueryClient();
   const { session } = useAuth();
-  const userId = session?.user.id;
+  const userId = session?.user?.id;
+
+  // ✅ input بدون user_id (هنضيفه من session)
+  type InsertOrderInput = Omit<InsertTables<"orders">, "user_id">;
 
   return useMutation({
-    mutationFn: async (data: InsertTables<"orders">) => {
-      const { error, data: newProduct } = await supabase
+    mutationFn: async (payload: InsertOrderInput) => {
+      if (!userId) throw new Error("Not authenticated");
+
+      const insertPayload: InsertTables<"orders"> = {
+        ...payload,
+        user_id: userId,
+      };
+
+      const { data, error } = await supabase
         .from("orders")
-        .insert({ ...data, user_id: userId })
-        .select()
+        .insert(insertPayload)
+        .select("id, created_at, status, total, user_id")
         .single();
 
       if (error) handleError(error);
-      return newProduct;
+      return data;
     },
+
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["my-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["order-details"] });
     },
-    onError: (error) => {
-      console.error("Insert Order Error:", error);
+
+    onError: (error: any) => {
+      console.error("Insert Order Error:", error?.message ?? error);
     },
   });
 };
@@ -104,22 +141,25 @@ export const useUpdateOrder = () => {
       id: number;
       updatedFields: UpdateTables<"orders">;
     }) => {
-      const { error, data: updatedOrder } = await supabase
+      const { data, error } = await supabase
         .from("orders")
         .update(updatedFields)
         .eq("id", id)
-        .select()
+        .select("id, created_at, status, total, user_id")
         .single();
 
       if (error) handleError(error);
-      return updatedOrder;
+      return data;
     },
-    onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.invalidateQueries({ queryKey: ["orders", id] });
+
+    onSuccess: (_data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["my-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["order-details", id] });
     },
-    onError: (error) => {
-      console.error("Update Order Error:", error);
+
+    onError: (error: any) => {
+      console.error("Update Order Error:", error?.message ?? error);
     },
   });
 };

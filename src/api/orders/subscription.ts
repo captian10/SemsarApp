@@ -6,30 +6,33 @@ export const useInsertOrderSubscription = () => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const orderSubscription = supabase
-      .channel("custom-insert-channel")
+    const channel = supabase
+      .channel("orders-insert-channel")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "orders" },
-        (payload) => {
-          console.log("Change received!", payload);
-          queryClient.invalidateQueries({ queryKey: ["orders"] });
+        () => {
+          // ✅ refresh admin lists + user lists
+          queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+          queryClient.invalidateQueries({ queryKey: ["my-orders"] });
         }
       )
       .subscribe();
 
     return () => {
-      orderSubscription.unsubscribe();
+      supabase.removeChannel(channel);
     };
-  }, []);
+  }, [queryClient]);
 };
 
 export const useUpdateOrderSubscription = (id: number) => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const orders = supabase
-      .channel("custom-filter-channel")
+    if (!Number.isFinite(id)) return;
+
+    const channel = supabase
+      .channel(`orders-update-${id}`)
       .on(
         "postgres_changes",
         {
@@ -38,14 +41,17 @@ export const useUpdateOrderSubscription = (id: number) => {
           table: "orders",
           filter: `id=eq.${id}`,
         },
-        (payload) => {
-          queryClient.invalidateQueries({ queryKey: ["orders", id] });
+        () => {
+          // ✅ refresh details + lists
+          queryClient.invalidateQueries({ queryKey: ["order-details", id] });
+          queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+          queryClient.invalidateQueries({ queryKey: ["my-orders"] });
         }
       )
       .subscribe();
 
     return () => {
-      orders.unsubscribe();
+      supabase.removeChannel(channel);
     };
-  }, []);
+  }, [id, queryClient]);
 };

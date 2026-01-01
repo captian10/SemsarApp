@@ -1,0 +1,52 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Expo / React Native caches
+.expo
+.expo-shared
+.metro-cache
+*.log
+
+# Build outputs
+android/build
+android/app/build
+ios/build
+dist
+build
+web-build
+
+# Gradle / Android Studio
+android/.gradle
+android/.idea
+android/.kotlin
+*.iml
+.gradle
+local.properties
+
+# iOS / Xcode
+ios/Pods
+ios/.symlinks
+ios/DerivedData
+*.xcworkspace
+*.xcuserstate
+*.xcuserdata
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Git (optional)
+.git
+.gitignore
+
+# Tests / coverage
+coverage
+
+# Assets you don't need to send (optional)
+**/*.psd
+**/*.ai
+**/*.sketch
+**/*.zip
+**/*.mp4
+**/*.mov

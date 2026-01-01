@@ -2,54 +2,35 @@
 import { registerForPushNotificationsAsync } from "@lib/notifications";
 import { supabase } from "@lib/supabase";
 import * as Notifications from "expo-notifications";
-import React, { useEffect, useRef, useState, type PropsWithChildren } from "react";
+import React, { useEffect, useRef, type PropsWithChildren } from "react";
 import { useAuth } from "./AuthProvider";
 
 // Foreground behavior
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
     shouldShowBanner: true,
     shouldShowList: true,
   }),
 });
 
-const NotificationProvider = ({ children }: PropsWithChildren) => {
-  const { profile, session } = useAuth();
+export default function NotificationProvider({ children }: PropsWithChildren) {
+  const { session, profile } = useAuth();
 
-  const [expoPushToken, setExpoPushToken] = useState<string>("");
-  const [pushError, setPushError] = useState<string>("");
+  // نخزن آخر userId اتسجل له توكن عشان ما نكررهاش
+  const lastRegisteredUserIdRef = useRef<string | null>(null);
 
-  const didInit = useRef(false);
-  const notificationListener = useRef<Notifications.Subscription | null>(null);
-  const responseListener = useRef<Notifications.Subscription | null>(null);
-
-  const savePushToken = async (userId: string, newToken: string) => {
-    if (!newToken) return;
-
-    // Avoid unnecessary DB writes
-    setExpoPushToken((prev) => (prev === newToken ? prev : newToken));
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ expo_push_token: newToken })
-      .eq("id", userId);
-
-    if (error) {
-      console.log("[push] Failed to save token:", error.message);
-    }
-  };
-
-  // 1) Register token when the user is logged in and profile is available
+  // 1) Register + save token (per user)
   useEffect(() => {
-    // Prevent double-runs in dev / remounts
-    if (didInit.current) return;
+    const userId = session?.user?.id;
+    const profileId = profile?.id;
 
-    // Only register if user is logged in and we have a profile id
-    if (!session?.user?.id || !profile?.id) return;
+    // لازم يبقى فيه session + profile
+    if (!userId || !profileId) return;
 
-    didInit.current = true;
+    // لو اتسجل قبل كده لنفس اليوزر: متعملش حاجة
+    if (lastRegisteredUserIdRef.current === userId) return;
 
     let cancelled = false;
 
@@ -58,16 +39,45 @@ const NotificationProvider = ({ children }: PropsWithChildren) => {
         const token = await registerForPushNotificationsAsync();
         if (cancelled) return;
 
-        await savePushToken(profile.id, token);
-        setPushError("");
-        console.log("[push] Expo Push Token:", token);
-      } catch (err: any) {
-        const msg = typeof err?.message === "string" ? err.message : String(err);
-        console.log("[push] registration error:", msg);
+        // 1) هات التوكن القديم من الـ profile
+        const { data: existing, error: readErr } = await supabase
+          .from("profiles")
+          .select("expo_push_token")
+          .eq("id", profileId)
+          .single();
+
         if (cancelled) return;
 
-        setExpoPushToken("");
-        setPushError(msg);
+        if (readErr) {
+          console.log("[push] Failed to read existing token:", readErr.message);
+        }
+
+        const oldToken = (existing as any)?.expo_push_token ?? null;
+
+        // 2) لو نفس التوكن موجود -> خلاص
+        if (oldToken === token) {
+          lastRegisteredUserIdRef.current = userId;
+          return;
+        }
+
+        // 3) خزّن التوكن الجديد
+        const { error: upErr } = await supabase
+          .from("profiles")
+          .update({ expo_push_token: token })
+          .eq("id", profileId);
+
+        if (upErr) {
+          console.log("[push] Failed to save token:", upErr.message);
+          return;
+        }
+
+        lastRegisteredUserIdRef.current = userId;
+        console.log("[push] Token saved:", token);
+      } catch (err: any) {
+        console.log(
+          "[push] registration error:",
+          typeof err?.message === "string" ? err.message : String(err)
+        );
       }
     })();
 
@@ -78,33 +88,28 @@ const NotificationProvider = ({ children }: PropsWithChildren) => {
 
   // 2) Listeners (once)
   useEffect(() => {
-    notificationListener.current = Notifications.addNotificationReceivedListener(
-      (notification) => {
-        console.log("[push] Notification received:", notification);
+    const n1 = Notifications.addNotificationReceivedListener((notification) => {
+      console.log("[push] Notification received:", notification);
+    });
+
+    const n2 = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        console.log("[push] Notification response:", response);
       }
     );
 
-    responseListener.current =
-      Notifications.addNotificationResponseReceivedListener((response) => {
-        console.log("[push] Notification response:", response);
-      });
-
     return () => {
-      notificationListener.current?.remove();
-      responseListener.current?.remove();
+      n1.remove();
+      n2.remove();
     };
   }, []);
 
-  // Optional: clear saved token when user logs out
+  // 3) Reset on logout (so next login registers again)
   useEffect(() => {
     if (!session?.user?.id) {
-      didInit.current = false;
-      setExpoPushToken("");
-      setPushError("");
+      lastRegisteredUserIdRef.current = null;
     }
   }, [session?.user?.id]);
 
   return <>{children}</>;
-};
-
-export default NotificationProvider;
+}

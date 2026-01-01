@@ -1,115 +1,241 @@
+// providers/CartProvider.tsx
 import { useInsertOrderItems } from "@api/order-items";
 import { useInsertOrder } from "@api/orders";
 import type { Tables } from "@database.types";
 import { randomUUID } from "expo-crypto";
 import { useRouter } from "expo-router";
-import {
+import React, {
   createContext,
   useContext,
+  useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from "react";
-import { CartItem } from "../types/types";
+import { Alert } from "react-native";
+import type { CartItem } from "../types/types";
 
 type Product = Tables<"products">;
 
+const DEFAULT_SIZE = "M" as CartItem["size"];
+
+type AddItemOptions = {
+  size?: CartItem["size"];
+  unitPrice?: number; // ✅ سعر الـ size المختار
+};
+
 type CartType = {
   items: CartItem[];
-  addItem: (product: Product, size: CartItem["size"]) => void;
+  itemsCount: number;
+
+  // old: addItem(product, "L")
+  // new: addItem(product, { size:"L", unitPrice: 120 })
+  addItem: (
+    product: Product,
+    sizeOrOpts?: CartItem["size"] | AddItemOptions
+  ) => void;
+
   updateQuantity: (itemId: string, amount: -1 | 1) => void;
+  setQuantity: (itemId: string, quantity: number) => void;
+  removeItem: (itemId: string) => void;
+  clearCart: () => void;
+
   total: number;
-  checkout: () => void;
+
+  isCheckingOut: boolean;
+  checkout: () => Promise<void>;
 };
 
 const CartContext = createContext<CartType>({
   items: [],
+  itemsCount: 0,
   addItem: () => {},
   updateQuantity: () => {},
+  setQuantity: () => {},
+  removeItem: () => {},
+  clearCart: () => {},
   total: 0,
-  checkout: () => {},
+  isCheckingOut: false,
+  checkout: async () => {},
 });
+
+const round2 = (n: number) =>
+  Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 const CartProvider = ({ children }: PropsWithChildren) => {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+  const router = useRouter();
 
   const { mutate: insertOrder } = useInsertOrder();
   const { mutate: insertOrderItems } = useInsertOrderItems();
-  const router = useRouter();
 
-  const addItem = (product: Product, size: CartItem["size"]) => {
-    // Check if the item already exists in the cart with the same product and size
-    const existingItemIndex = items.findIndex(
-      (item) => item.product_id === product.id && item.size === size
-    );
+  // ✅ lock ضد double checkout
+  const checkoutLock = useRef(false);
 
-    if (existingItemIndex !== -1) {
-      // If the item exists, increase its quantity
-      const updatedItems = [...items];
-      updatedItems[existingItemIndex].quantity += 1;
-      setItems(updatedItems);
-    } else {
-      // If the item doesn't exist, add a new item to the cart
-      const newCartItem: CartItem = {
-        id: randomUUID(), // Unique ID based on product and size
-        product,
-        product_id: product.id,
-        size,
+  const addItem: CartType["addItem"] = (product, sizeOrOpts) => {
+    const opts: AddItemOptions =
+      typeof sizeOrOpts === "string"
+        ? { size: sizeOrOpts }
+        : (sizeOrOpts ?? {});
+
+    const finalSize = (opts.size ?? DEFAULT_SIZE) as CartItem["size"];
+
+    const unitPrice =
+      typeof opts.unitPrice === "number" && Number.isFinite(opts.unitPrice)
+        ? opts.unitPrice
+        : undefined;
+
+    // ✅ لو اتبعت unitPrice: نخليه سعر المنتج داخل الكارت (للحسابات)
+    const productForCart =
+      unitPrice != null ? ({ ...product, price: unitPrice } as Product) : product;
+
+    setItems((prev) => {
+      const idx = prev.findIndex(
+        (it) => it.product_id === productForCart.id && it.size === finalSize
+      );
+
+      if (idx !== -1) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
+        return next;
+      }
+
+      const newItem: CartItem = {
+        id: randomUUID(),
+        product: productForCart,
+        product_id: productForCart.id,
+        size: finalSize,
         quantity: 1,
       };
-      setItems((prevItems) => [...prevItems, newCartItem]);
-    }
+
+      return [...prev, newItem];
+    });
   };
 
-  const updateQuantity = (itemId: string, amount: -1 | 1) => {
-    const updatedItems = items
-      .map((item) =>
-        item.id === itemId
-          ? { ...item, quantity: item.quantity + amount }
-          : item
-      )
-      .filter((item) => item.quantity > 0);
-    setItems(updatedItems);
-  };
-
-  const total = items.reduce(
-    (sum, item) => (sum += item.product.price * item.quantity),
-    0
-  );
-
-  const clearCart = () => {
-    setItems([]);
-  };
-
-  const checkout = () => {
-    insertOrder(
-      { total },
-      {
-        onSuccess: saveOrderItems,
-      }
+  const updateQuantity: CartType["updateQuantity"] = (itemId, amount) => {
+    setItems((prev) =>
+      prev
+        .map((item) =>
+          item.id === itemId ? { ...item, quantity: item.quantity + amount } : item
+        )
+        .filter((item) => item.quantity > 0)
     );
   };
 
-  const saveOrderItems = (order: Tables<"orders"> | null) => {
-    if (!order) return;
+  const setQuantity: CartType["setQuantity"] = (itemId, quantity) => {
+    const q = Math.max(0, Math.floor(quantity));
+    setItems((prev) =>
+      prev
+        .map((item) => (item.id === itemId ? { ...item, quantity: q } : item))
+        .filter((item) => item.quantity > 0)
+    );
+  };
 
-    const orderItems = items.map((cartItem) => ({
-      order_id: order.id,
-      product_id: cartItem.product_id,
-      quantity: cartItem.quantity,
-      size: cartItem.size,
-    }));
+  const removeItem: CartType["removeItem"] = (itemId) => {
+    setItems((prev) => prev.filter((item) => item.id !== itemId));
+  };
 
-    insertOrderItems(orderItems, {
-      onSuccess() {
-        clearCart();
-        router.push(`/(user)/orders/${order.id}`);
-      },
-    });
+  const clearCart = () => setItems([]);
+
+  const total = useMemo(() => {
+    const t = items.reduce(
+      (sum, item) =>
+        sum + Number(item.product.price ?? 0) * Number(item.quantity ?? 0),
+      0
+    );
+    return round2(t);
+  }, [items]);
+
+  const itemsCount = useMemo(() => {
+    return items.reduce((sum, item) => sum + Number(item.quantity ?? 0), 0);
+  }, [items]);
+
+  const checkout: CartType["checkout"] = async () => {
+    if (checkoutLock.current || isCheckingOut) return;
+
+    if (!items.length) {
+      Alert.alert("السلة فاضية", "ضيف منتجات الأول قبل ما تعمل طلب.");
+      return;
+    }
+
+    checkoutLock.current = true;
+    setIsCheckingOut(true);
+
+    try {
+      // ✅ snapshot
+      const snapshotItems = [...items];
+      const snapshotTotal = round2(
+        snapshotItems.reduce(
+          (sum, item) =>
+            sum + Number(item.product.price ?? 0) * Number(item.quantity ?? 0),
+          0
+        )
+      );
+
+      // 1) Create order (✅ user_id بياخده الهوك من session)
+      const order = await new Promise<Tables<"orders"> | null>((resolve, reject) => {
+        insertOrder(
+          { total: snapshotTotal } as any,
+          {
+            onSuccess: (o) => resolve(o),
+            onError: (e) => reject(e),
+          }
+        );
+      });
+
+      const orderId = Number(order?.id);
+      if (!orderId || !Number.isFinite(orderId)) {
+        Alert.alert("خطأ", "لم يتم إنشاء الطلب بشكل صحيح.");
+        return;
+      }
+
+      // 2) Prepare order items (✅ unit_price موجود عندك + NOT NULL)
+      const orderItems = snapshotItems.map((cartItem) => {
+        const unitPrice = Number(cartItem.product.price ?? 0);
+
+        return {
+          order_id: orderId,
+          product_id: Number(cartItem.product_id),
+          quantity: Number(cartItem.quantity ?? 0),
+          size: String(cartItem.size ?? DEFAULT_SIZE),
+          unit_price: unitPrice,
+        };
+      });
+
+      // 3) Insert order items
+      await new Promise<void>((resolve, reject) => {
+        insertOrderItems(orderItems as any, {
+          onSuccess: () => resolve(),
+          onError: (e) => reject(e),
+        });
+      });
+
+      clearCart();
+      router.push(`/(user)/orders/${orderId}`);
+    } catch (e: any) {
+      Alert.alert("خطأ", e?.message ?? "حصلت مشكلة أثناء إنشاء الطلب.");
+    } finally {
+      checkoutLock.current = false;
+      setIsCheckingOut(false);
+    }
   };
 
   return (
     <CartContext.Provider
-      value={{ items, addItem, updateQuantity, total, checkout }}
+      value={{
+        items,
+        itemsCount,
+        addItem,
+        updateQuantity,
+        setQuantity,
+        removeItem,
+        clearCart,
+        total,
+        isCheckingOut,
+        checkout,
+      }}
     >
       {children}
     </CartContext.Provider>
@@ -117,5 +243,4 @@ const CartProvider = ({ children }: PropsWithChildren) => {
 };
 
 export default CartProvider;
-
 export const useCart = () => useContext(CartContext);

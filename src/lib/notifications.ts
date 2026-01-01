@@ -1,3 +1,4 @@
+import "react-native-url-polyfill/auto";
 import type { Tables } from "@database.types";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
@@ -49,10 +50,19 @@ async function getExpoTokenWithRetry(projectId: string, retries = 5) {
 }
 
 export async function registerForPushNotificationsAsync(): Promise<string> {
-  // Android channel (required for Android 8+)
+  // Android channels (Android 8+)
   if (Platform.OS === "android") {
+    // Default channel (general)
     await Notifications.setNotificationChannelAsync("default", {
-      name: "default",
+      name: "الإشعارات",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#FF231F7C",
+    });
+
+    // Orders channel (order updates)
+    await Notifications.setNotificationChannelAsync("orders", {
+      name: "تحديثات الطلبات",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#FF231F7C",
@@ -61,7 +71,7 @@ export async function registerForPushNotificationsAsync(): Promise<string> {
 
   // Must be a physical device
   if (!Device.isDevice) {
-    handleRegistrationError("Must use a physical device for push notifications.");
+    handleRegistrationError("لازم تستخدم موبايل حقيقي عشان الإشعارات تشتغل.");
   }
 
   // Permissions
@@ -74,7 +84,7 @@ export async function registerForPushNotificationsAsync(): Promise<string> {
   }
 
   if (finalStatus !== "granted") {
-    handleRegistrationError("Permission not granted to get push token.");
+    handleRegistrationError("لم يتم منح صلاحيات الإشعارات.");
   }
 
   // projectId is required for getExpoPushTokenAsync
@@ -98,14 +108,14 @@ export async function registerForPushNotificationsAsync(): Promise<string> {
       console.log("[push] Native device token (FCM):", nativeToken);
 
       handleRegistrationError(
-        "Expo Push Token failed, but native FCM token exists. If you plan to use Expo Push Service, fix FCM setup/network so Expo token can be generated."
+        "فشل استخراج Expo Push Token، لكن يوجد Native FCM Token. راجع إعدادات FCM / google-services.json."
       );
     } catch (nativeErr: any) {
       const nativeMsg =
         typeof nativeErr?.message === "string" ? nativeErr.message : String(nativeErr);
 
       handleRegistrationError(
-        `Push setup problem:\n\nExpo token error: ${msg}\nNative token error: ${nativeMsg}\n\nUsually this means google-services.json not applied, Google Play Services issue, or network/VPN/Private DNS restrictions.`
+        `مشكلة إعداد الإشعارات:\n\nExpo token error: ${msg}\nNative token error: ${nativeMsg}\n\nغالباً google-services.json غير مطبق أو مشكلة Google Play Services أو شبكة/VPN/Private DNS.`
       );
     }
   }
@@ -125,19 +135,24 @@ export async function sendPushNotification(
     body?: string;
     data?: Record<string, any>;
     sound?: "default" | null;
+    /** Android only (Expo): which channel to use */
+    channelId?: string;
   }
 ): Promise<ExpoPushTicket> {
   if (!isExpoPushToken(expoPushToken)) {
     throw new Error("Invalid Expo push token format.");
   }
 
-  const message = {
+  const message: Record<string, any> = {
     to: expoPushToken,
     sound: opts?.sound ?? "default",
-    title: opts?.title ?? "Notification",
+    title: opts?.title ?? "إشعار",
     body: opts?.body ?? "",
     data: opts?.data ?? {},
   };
+
+  // Expo supports channelId for Android
+  if (opts?.channelId) message.channelId = opts.channelId;
 
   const res = await fetch("https://exp.host/--/api/v2/push/send", {
     method: "POST",
@@ -198,8 +213,51 @@ export const getUserExpoPushToken = async (userId: string): Promise<string | nul
   return typeof token === "string" && token.length > 0 ? token : null;
 };
 
-// Optional: nicer messages per status (edit to match your OrderStatusList exactly)
-const STATUS_MESSAGE: Record<string, string> = {
+// ----------------------------
+// Status normalization + messages
+// ----------------------------
+
+type NormalizedStatus = "new" | "cooking" | "delivering" | "delivered" | "canceled";
+
+const normalizeStatus = (s: unknown): string => String(s ?? "").trim().toLowerCase();
+
+/**
+ * Map whatever comes from DB/Admin UI (New/Cooking/Cancelled/Preparing/etc)
+ * into one stable key for UI + notifications.
+ */
+const toStatusKey = (raw: unknown): NormalizedStatus | null => {
+  const s = normalizeStatus(raw);
+
+  if (!s) return null;
+
+  // Accept both spellings
+  if (s === "canceled" || s === "cancelled") return "canceled";
+
+  // Accept synonyms
+  if (s === "preparing" || s === "preparation") return "cooking";
+
+  // Direct matches
+  if (s === "new") return "new";
+  if (s === "cooking") return "cooking";
+  if (s === "delivering") return "delivering";
+  if (s === "delivered") return "delivered";
+
+  return null;
+};
+
+/**
+ * Arabic notification messages by normalized status key.
+ */
+const STATUS_MESSAGE_AR: Record<NormalizedStatus, string> = {
+  new: "تم استلام طلبك ✅",
+  cooking: "جاري تجهيز طلبك 🍳",
+  delivering: "طلبك في الطريق 🚚",
+  delivered: "تم توصيل طلبك 🎉",
+  canceled: "تم إلغاء طلبك ❌",
+};
+
+// If you ever want bilingual, keep this and switch later
+const STATUS_MESSAGE_EN: Record<NormalizedStatus, string> = {
   new: "We received your order ✅",
   cooking: "Your order is being prepared 🍳",
   delivering: "Your order is on the way 🚚",
@@ -207,13 +265,19 @@ const STATUS_MESSAGE: Record<string, string> = {
   canceled: "Your order was canceled ❌",
 };
 
+// Change this if you want EN
+const APP_LANG: "ar" | "en" = "ar";
+
+const STATUS_MESSAGE: Record<NormalizedStatus, string> =
+  APP_LANG === "ar" ? STATUS_MESSAGE_AR : STATUS_MESSAGE_EN;
+
 /**
  * Notify user about order update.
  * IMPORTANT: Best practice is to run this on a backend with service role.
  */
 export const notifyUserAboutOrderUpdate = async (
   order: Tables<"orders">,
-  newStatus: string
+  newStatus: unknown
 ): Promise<ExpoPushTicket | null> => {
   if (!order?.id) {
     console.log("[push] Missing order id");
@@ -223,10 +287,9 @@ export const notifyUserAboutOrderUpdate = async (
     console.log("[push] No user_id for order:", order.id);
     return null;
   }
-  if (!newStatus) {
-    console.log("[push] Missing newStatus for order:", order.id);
-    return null;
-  }
+
+  const key = toStatusKey(newStatus);
+  const rawStatus = String(newStatus ?? "");
 
   const token = await getUserExpoPushToken(order.user_id);
   if (!token) {
@@ -234,17 +297,23 @@ export const notifyUserAboutOrderUpdate = async (
     return null;
   }
 
-  const title = "Order update";
-  const body = STATUS_MESSAGE[newStatus] ?? `Your order is now: ${newStatus}`;
+  const title = APP_LANG === "ar" ? "تحديث الطلب" : "Order update";
+  const body = key
+    ? STATUS_MESSAGE[key]
+    : APP_LANG === "ar"
+    ? `تم تحديث حالة طلبك إلى: ${rawStatus}`
+    : `Your order is now: ${rawStatus}`;
 
   try {
     const ticket = await sendPushNotification(token, {
       title,
       body,
+      channelId: "orders",
       data: {
         type: "order_status_updated",
         orderId: order.id,
-        status: newStatus,
+        status: rawStatus,
+        status_normalized: key ?? "",
       },
     });
 
