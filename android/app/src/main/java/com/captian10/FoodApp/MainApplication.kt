@@ -1,4 +1,4 @@
-package com.captian10.FoodApp
+package com.captian10.SemsarApp
 
 import android.app.Application
 import android.content.res.Configuration

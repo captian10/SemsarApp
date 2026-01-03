@@ -1,4 +1,4 @@
-package com.captian10.FoodApp
+package com.captian10.SemsarApp
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

@@ -7,7 +7,7 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
 // ✅ خليه ثابت عشان مسح الجلسة يبقى سهل
-export const SUPABASE_STORAGE_KEY = "sb-foodapp-auth";
+export const SUPABASE_STORAGE_KEY = "sb-semsarapp-auth";
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn(

@@ -19,7 +19,7 @@ import React, {
  * If you didn't set it, Supabase uses: `sb-${projectRef}-auth-token`
  *
  * Easiest: set a fixed storageKey in your supabase client (recommended):
- * storageKey: "sb-foodapp-auth"
+ * storageKey: "sb-semsarapp-auth"
  * Then keep it same here.
  */
 const AUTH_STORAGE_KEY = "sb-foodapp-auth";

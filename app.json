@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "مطعم الباشا",
-    "slug": "FoodApp",
+    "name": "سمسار",
+    "slug": "SemsarApp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "foodapp",
+    "scheme": "semsarapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "notification": {
@@ -27,7 +27,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.captian10.FoodApp",
+      "bundleIdentifier": "com.captian10.SemsarApp",
       "infoPlist": {
         "NSUserTrackingUsageDescription": "We use this data to provide a better experience and improve the app.",
         "ITSAppUsesNonExemptEncryption": false
@@ -40,7 +40,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.captian10.FoodApp",
+      "package": "com.captian10.SemsarApp",
       "googleServicesFile": "./google-services.json"
     },
     "web": {
