@@ -16,20 +16,17 @@ import React, {
 /**
  * ✅ IMPORTANT
  * This MUST match the storageKey you use in createClient(..., { auth: { storageKey } })
- * If you didn't set it, Supabase uses: `sb-${projectRef}-auth-token`
- *
- * Easiest: set a fixed storageKey in your supabase client (recommended):
- * storageKey: "sb-semsarapp-auth"
- * Then keep it same here.
+ * Example (recommended in your supabase client):
+ *   storageKey: "sb-semsarapp-auth"
  */
 const AUTH_STORAGE_KEY = "sb-semsarapp-auth";
 
 type Profile = {
   id: string;
-  role: string; // USER / ADMIN
+  role: string; // 'user' | 'admin' in DB (enum user_role)
   full_name: string | null;
   phone: string | null;
-  email: string | null;
+  email: string | null; // comes from auth.user.email, not DB column
 } | null;
 
 type AuthData = {
@@ -41,7 +38,7 @@ type AuthData = {
   // actions
   refetchProfile: () => Promise<void>;
   signOut: () => Promise<void>;
-  resetAuth: () => Promise<void>; // deletes local session + securestore key
+  resetAuth: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthData>({
@@ -82,10 +79,10 @@ export default function AuthProvider({ children }: PropsWithChildren) {
   const [authLoading, setAuthLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
 
-  // prevents old fetch result from overriding new one
+  // prevents old fetch result from overriding newer one
   const fetchIdRef = useRef(0);
 
-  // ✅ init session + subscribe
+  // ✅ init session + subscribe to auth changes
   useEffect(() => {
     let mounted = true;
 
@@ -107,8 +104,7 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     const { data: sub } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
         setSession(newSession ?? null);
-        setProfile(null);
-        // profile will refetch automatically by effect below
+        setProfile(null); // will refetch below
       }
     );
 
@@ -131,17 +127,16 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     setProfileLoading(true);
 
     try {
-      // 1) Try read profile row
+      // 1) Try read profile row (NOTE: no email column in table)
       const res = await withTimeout(
         supabase
           .from("profiles")
-          .select("id, role, full_name, phone, email")
+          .select("id, role, full_name, phone")
           .eq("id", user.id)
           .maybeSingle(),
         8000
       );
 
-      // ignore if newer fetch started
       if (myFetchId !== fetchIdRef.current) return;
 
       const { data, error } = res;
@@ -155,29 +150,28 @@ export default function AuthProvider({ children }: PropsWithChildren) {
       if (data) {
         setProfile({
           id: data.id,
-          role: String(data.role ?? "USER"),
+          role: String(data.role ?? "user"), // enum user_role: 'user' | 'admin'
           full_name: data.full_name ?? null,
           phone: data.phone ?? null,
-          email: data.email ?? null,
+          email: safeText(user.email, null), // from auth, not DB
         });
         return;
       }
 
-      // 2) If row missing -> upsert a default row (✅ includes email)
+      // 2) If row missing -> upsert a default row (no email column)
       const meta = (user.user_metadata as any) ?? {};
       const payload = {
         id: user.id,
-        role: "USER",
+        role: "user",
         full_name: safeText(meta.full_name, null),
         phone: safeText(meta.phone, null),
-        email: safeText(user.email, null), // ✅ save email
       };
 
       const upRes = await withTimeout(
         supabase
           .from("profiles")
           .upsert(payload, { onConflict: "id" })
-          .select("id, role, full_name, phone, email")
+          .select("id, role, full_name, phone")
           .maybeSingle(),
         8000
       );
@@ -196,10 +190,10 @@ export default function AuthProvider({ children }: PropsWithChildren) {
         up
           ? {
               id: up.id,
-              role: String(up.role ?? "USER"),
+              role: String(up.role ?? "user"),
               full_name: up.full_name ?? null,
               phone: up.phone ?? null,
-              email: up.email ?? null,
+              email: safeText(user.email, null),
             }
           : null
       );
@@ -220,15 +214,14 @@ export default function AuthProvider({ children }: PropsWithChildren) {
   const isAdmin = useMemo(() => {
     const r = String(profile?.role ?? "")
       .trim()
-      .toUpperCase();
-    return r === "ADMIN";
+      .toLowerCase();
+    return r === "admin";
   }, [profile?.role]);
 
   const loading = authLoading || (session ? profileLoading : false);
 
   const signOut = useCallback(async () => {
     try {
-      // local only (faster) – you can remove scope if you want revoke everywhere
       await supabase.auth.signOut({ scope: "local" });
     } catch (e: any) {
       console.log("signOut error:", e?.message ?? String(e));
@@ -241,8 +234,8 @@ export default function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   /**
-   * ✅ Use this if app is stuck on ActivityIndicator after restart
-   * It clears the stored session key in SecureStore + signs out.
+   * ✅ Use this if app is stuck on ActivityIndicator after restart.
+   * Clears stored session in SecureStore + signs out.
    */
   const resetAuth = useCallback(async () => {
     try {
@@ -250,11 +243,9 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     } catch {}
 
     try {
-      // delete main key
       await SecureStore.deleteItemAsync(AUTH_STORAGE_KEY);
 
-      // also delete chunked keys (if you ever used chunking)
-      // (safe even if they don't exist)
+      // also delete chunked keys if they exist
       for (let i = 0; i < 30; i++) {
         await SecureStore.deleteItemAsync(`${AUTH_STORAGE_KEY}.${i}`);
       }
