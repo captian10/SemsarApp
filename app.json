@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "سمسار",
-    "slug": "SemsarApp",
+    "slug": "semsarapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -19,15 +19,15 @@
     },
     "androidStatusBar": {
       "translucent": true,
-      "backgroundColor": "#00000000"
+      "backgroundColor": "#000000"
     },
     "androidNavigationBar": {
-      "backgroundColor": "#00000000",
+      "backgroundColor": "#000000",
       "barStyle": "light-content"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.captian10.SemsarApp",
+      "bundleIdentifier": "com.captian10.semsarapp",
       "infoPlist": {
         "NSUserTrackingUsageDescription": "We use this data to provide a better experience and improve the app.",
         "ITSAppUsesNonExemptEncryption": false
@@ -40,7 +40,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.captian10.SemsarApp",
+      "package": "com.captian10.semsarapp",
       "googleServicesFile": "./google-services.json"
     },
     "web": {
@@ -57,9 +57,9 @@
         "expo-navigation-bar",
         {
           "position": "absolute",
-          "backgroundColor": "#00000000",
+          "backgroundColor": "#000000",
           "barStyle": "light",
-          "borderColor": "#00000000"
+          "borderColor": "#000000"
         }
       ]
     ],

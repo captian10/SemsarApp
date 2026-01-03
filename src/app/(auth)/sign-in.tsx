@@ -4,6 +4,7 @@ import { Link, Stack } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,6 +13,7 @@ import {
   Text,
   TextInput,
   View,
+  type ImageStyle,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
@@ -24,35 +26,48 @@ const SignInScreen = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const [showPassword, setShowPassword] = useState(false); // ✅ جديد
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const canSubmit = useMemo(() => {
-    return email.trim().length > 0 && password.trim().length > 0 && !loading;
-  }, [email, password, loading]);
+  const canSubmit = useMemo(
+    () => email.trim().length > 0 && password.trim().length > 0 && !loading,
+    [email, password, loading]
+  );
 
   async function signInWithEmail() {
-    if (!email.trim() || !password.trim()) {
+    const e = email.trim();
+    const p = password.trim();
+
+    if (!e || !p) {
       Alert.alert("تنبيه", "من فضلك اكتب البريد الإلكتروني وكلمة المرور.");
       return;
     }
 
     setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: e,
+        password: p,
+      });
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+      if (error) {
+        Alert.alert("خطأ", error.message);
+        return;
+      }
 
-    if (error) Alert.alert("خطأ", error.message);
-
-    setLoading(false);
+      // لاحقًا: تقرأ profiles وتوجّه admin / user حسب الدور
+    } catch (err: any) {
+      Alert.alert("خطأ", err?.message ?? "حدث خطأ غير متوقع");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
     >
       <Stack.Screen options={{ headerShown: false }} />
 
@@ -60,6 +75,15 @@ const SignInScreen = () => {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Image on top */}
+        <View style={styles.imageWrap}>
+          <Image
+            source={require("../../../assets/images/semsarMainScreenIcon.png")}
+            style={styles.heroImage}
+            resizeMode="contain"
+          />
+        </View>
+
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>تسجيل الدخول</Text>
@@ -73,31 +97,47 @@ const SignInScreen = () => {
           {/* Email */}
           <View style={styles.field}>
             <Text style={styles.label}>البريد الإلكتروني</Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="example@gmail.com"
-              placeholderTextColor={THEME.gray[100]}
-              style={[styles.input, styles.inputEmail]}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              editable={!loading}
-            />
+            <View style={styles.inputWrapperSurface}>
+              <FontAwesome
+                name="envelope-o"
+                size={16}
+                color={THEME.gray[100]}
+                style={styles.leadingIcon}
+              />
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder="example@gmail.com"
+                placeholderTextColor={THEME.gray[100]}
+                style={[
+                  styles.input,
+                  styles.inputEmail,
+                  styles.inputWithLeading,
+                ]}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                editable={!loading}
+              />
+            </View>
           </View>
 
           {/* Password */}
           <View style={styles.field}>
             <Text style={styles.label}>كلمة المرور</Text>
 
-            {/* ✅ Wrapper عشان العين */}
-            <View style={styles.inputWrap}>
+            <View style={styles.inputWrapperSurface}>
               <TextInput
                 value={password}
                 onChangeText={setPassword}
                 placeholder="••••••••"
                 placeholderTextColor={THEME.gray[100]}
-                style={[styles.input, styles.inputRtl, styles.inputWithIcon]}
+                style={[
+                  styles.input,
+                  styles.inputRtl,
+                  styles.inputWithLeading,
+                  styles.inputWithTrailing,
+                ]}
                 secureTextEntry={!showPassword}
                 editable={!loading}
               />
@@ -149,6 +189,9 @@ type Styles = {
   screen: ViewStyle;
   container: ViewStyle;
 
+  imageWrap: ViewStyle;
+  heroImage: ImageStyle;
+
   header: ViewStyle;
   title: TextStyle;
   subtitle: TextStyle;
@@ -158,12 +201,15 @@ type Styles = {
   field: ViewStyle;
   label: TextStyle;
 
-  inputWrap: ViewStyle; // ✅ جديد
+  inputWrapperSurface: ViewStyle;
+  inputWrap: ViewStyle;
   input: TextStyle;
   inputRtl: TextStyle;
   inputEmail: TextStyle;
-  inputWithIcon: TextStyle; // ✅ جديد
-  eyeBtn: ViewStyle; // ✅ جديد
+  inputWithLeading: TextStyle;
+  inputWithTrailing: TextStyle;
+  leadingIcon: TextStyle;
+  eyeBtn: ViewStyle;
 
   dividerRow: ViewStyle;
   divider: ViewStyle;
@@ -178,24 +224,35 @@ type Styles = {
 const styles = StyleSheet.create<Styles>({
   screen: {
     flex: 1,
+    backgroundColor: THEME.dark[100], // same as auth background
+  },
+
+  // Center content vertically, no flex-start on keyboard
+  container: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    gap: 16,
     backgroundColor: "transparent",
   },
-  container: {
-    padding: 16,
-    paddingBottom: 28,
-    justifyContent: "center",
-    flexGrow: 1,
-    gap: 12,
-    backgroundColor: "transparent",
+
+  imageWrap: {
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  heroImage: {
+    width: 200,
+    height: 200,
   },
 
   header: {
     gap: 6,
     paddingHorizontal: 2,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   title: {
-    fontSize: 26,
+    fontSize: 24,
     color: THEME.white.DEFAULT,
     textAlign: "center",
     fontFamily: FONT.bold,
@@ -208,9 +265,9 @@ const styles = StyleSheet.create<Styles>({
   },
 
   card: {
-    backgroundColor: "rgba(255,255,255,0.92)",
+    backgroundColor: "rgba(255,255,255,0.95)",
     borderRadius: 22,
-    padding: 14,
+    padding: 16,
     gap: 12,
     shadowColor: "#000000",
     shadowOpacity: 0.12,
@@ -227,38 +284,48 @@ const styles = StyleSheet.create<Styles>({
     fontFamily: FONT.medium,
   },
 
-  // ✅ Wrapper للعين
+  inputWrapperSurface: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    backgroundColor: THEME.white[100],
+    borderWidth: 1,
+    borderColor: "#E6E6E6",
+    paddingHorizontal: 12,
+  },
+
   inputWrap: {
     position: "relative",
     width: "100%",
   },
 
   input: {
-    borderWidth: 1,
-    borderColor: "#E6E6E6",
-    paddingHorizontal: 14,
+    flex: 1,
     paddingVertical: 12,
-    backgroundColor: THEME.white[100],
-    borderRadius: 14,
     fontSize: 15,
     color: THEME.dark[100],
     fontFamily: FONT.regular,
-    alignSelf: "stretch",
   },
 
-  // عربي
   inputRtl: {
     textAlign: "right",
   },
 
-  // Email أفضل LTR
   inputEmail: {
     textAlign: "right",
   },
 
-  // ✅ عشان العين ما تغطي النص
-  inputWithIcon: {
-    paddingLeft: 44,
+  inputWithLeading: {
+    paddingLeft: 4,
+  },
+
+  inputWithTrailing: {
+    paddingLeft: 40,
+  },
+
+  leadingIcon: {
+    marginLeft: 8,
+    marginRight: 6,
   },
 
   eyeBtn: {
@@ -274,7 +341,7 @@ const styles = StyleSheet.create<Styles>({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginTop: 2,
+    marginTop: 4,
   },
   divider: {
     flex: 1,

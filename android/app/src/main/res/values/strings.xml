@@ -1,5 +1,7 @@
 <resources>
-  <string name="app_name">مطعم الباشا</string>
-  <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
-  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <string name="app_name">سمسار</string>
+  <string name="expo_splash_screen_resize_mode" translatable="false">cover</string>
+  <string name="expo_splash_screen_status_bar_translucent" translatable="false">true</string>
+  <string name="expo_navigation_bar_border_color" translatable="false">-16777216</string>
+  <string name="expo_navigation_bar_position" translatable="false">absolute</string>
 </resources>

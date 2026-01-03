@@ -1,24 +1,29 @@
 // constants/Colors.ts
 
-const tintColorLight = "#FE8C00";
-const tintColorDark = "#ffffff";
+const tintColorLight = "#2563EB"; // modern booking blue
+const tintColorDark = "#F9FAFB";
 
 export const THEME = {
-  primary: "#FE8C00",
+  // Main brand color (buttons, highlights, links)
+  primary: "#2563EB", // royal blue
+
   white: {
-    DEFAULT: "#ffffff",
-    100: "#fafafa",
-    200: "#FE8C00",
+    DEFAULT: "#F9FAFB", // app background in light mode
+    100: "#FFFFFF",     // cards / surfaces
+    200: "#E5E7EB",     // subtle borders / dividers
   },
+
   gray: {
-    100: "#878787",
-    200: "#878787",
+    100: "#9CA3AF", // muted text, placeholders
+    200: "#6B7280", // main body text on white
   },
+
   dark: {
-    100: "#181C2E",
+    100: "#09133C", // deep navy (used for dark screens like auth background)
   },
-  error: "#F14141",
-  success: "#2F9B65",
+
+  error: "#EF4444",
+  success: "#22C55E",
 } as const;
 
 const Colors = {
@@ -31,7 +36,7 @@ const Colors = {
   },
   dark: {
     text: THEME.white.DEFAULT,
-    background: "#000000",
+    background: "#020617",
     tint: tintColorDark,
     tabIconDefault: THEME.gray[100],
     tabIconSelected: tintColorDark,

@@ -1,6 +1,7 @@
 import { forwardRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Colors from "../constants/Colors";
+import { FONT } from "@constants/Typography";
 
 type ButtonProps = {
   text: string;
@@ -28,6 +29,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "white",
+        fontFamily: FONT.bold,   // 👈 USE CUSTOM FONT HERE
+
   },
 });
 

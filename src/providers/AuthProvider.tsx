@@ -22,17 +22,15 @@ import React, {
  * storageKey: "sb-semsarapp-auth"
  * Then keep it same here.
  */
-const AUTH_STORAGE_KEY = "sb-foodapp-auth";
+const AUTH_STORAGE_KEY = "sb-semsarapp-auth";
 
-type Profile =
-  | {
-      id: string;
-      role: string; // USER / ADMIN
-      full_name: string | null;
-      phone: string | null;
-      email: string | null;
-    }
-  | null;
+type Profile = {
+  id: string;
+  role: string; // USER / ADMIN
+  full_name: string | null;
+  phone: string | null;
+  email: string | null;
+} | null;
 
 type AuthData = {
   session: Session | null;
@@ -61,7 +59,10 @@ const safeText = (v: unknown, fallback: string | null = null) => {
   return s ? s : fallback;
 };
 
-const withTimeout = <T,>(promiseLike: PromiseLike<T>, ms = 8000): Promise<T> => {
+const withTimeout = <T,>(
+  promiseLike: PromiseLike<T>,
+  ms = 8000
+): Promise<T> => {
   const p = Promise.resolve(promiseLike);
 
   let t: ReturnType<typeof setTimeout> | undefined;
@@ -103,11 +104,13 @@ export default function AuthProvider({ children }: PropsWithChildren) {
       }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession ?? null);
-      setProfile(null);
-      // profile will refetch automatically by effect below
-    });
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      (_event, newSession) => {
+        setSession(newSession ?? null);
+        setProfile(null);
+        // profile will refetch automatically by effect below
+      }
+    );
 
     return () => {
       mounted = false;
@@ -215,7 +218,9 @@ export default function AuthProvider({ children }: PropsWithChildren) {
   }, [refetchProfile]);
 
   const isAdmin = useMemo(() => {
-    const r = String(profile?.role ?? "").trim().toUpperCase();
+    const r = String(profile?.role ?? "")
+      .trim()
+      .toUpperCase();
     return r === "ADMIN";
   }, [profile?.role]);
 
