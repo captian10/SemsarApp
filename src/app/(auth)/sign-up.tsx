@@ -168,9 +168,9 @@ const SignUpScreen = () => {
       >
         {/* Top hero / brand */}
         <View style={styles.hero}>
-          <Text style={styles.heroTitle}>أنشئ حسابك لحجز شقتك بسهولة</Text>
+          <Text style={styles.heroTitle}>أنشئ حسابك للحجز بسهولة</Text>
           <Text style={styles.heroSubtitle}>
-            احفظ بياناتك لتستكشف البنايات والشقق المتاحة، وتتابع حجوزاتك في مكان
+            احفظ بياناتك لتستكشف المحلات والشقق المتاحة، وتتابع حجوزاتك في مكان
             واحد.
           </Text>
         </View>
@@ -332,9 +332,7 @@ const SignUpScreen = () => {
           <Button
             onPress={signUpWithEmail}
             disabled={!canSubmit}
-            text={
-              loading ? "جاري إنشاء الحساب..." : "إنشاء حساب والبدء في الحجز"
-            }
+            text={loading ? "جاري إنشاء الحساب..." : "إنشاء  الحساب "}
           />
 
           <View style={styles.dividerRow}>

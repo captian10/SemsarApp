@@ -78,7 +78,7 @@ const SignInScreen = () => {
         {/* Image on top */}
         <View style={styles.imageWrap}>
           <Image
-            source={require("../../../assets/images/semsarMainScreenIcon.png")}
+            source={require("../../../assets/images/S.png")}
             style={styles.heroImage}
             resizeMode="contain"
           />
@@ -86,7 +86,7 @@ const SignInScreen = () => {
 
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>تسجيل الدخول</Text>
+          <Text style={styles.title}>تطبيق سمسار للحجز والإستعلام</Text>
           <Text style={styles.subtitle}>
             ادخل البريد الإلكتروني وكلمة المرور
           </Text>
