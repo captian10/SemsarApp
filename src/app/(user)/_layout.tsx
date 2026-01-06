@@ -4,11 +4,10 @@ import React, { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useClientOnlyValue } from "@components/useClientOnlyValue";
-import { useColorScheme } from "@components/useColorScheme";
-import { useAuth } from "@providers/AuthProvider";
-import { THEME } from "@constants/Colors";
 import { FONT } from "@/constants/Typography";
+import { useClientOnlyValue } from "@components/useClientOnlyValue";
+import { THEME } from "@constants/Colors";
+import { useAuth } from "@providers/AuthProvider";
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>["name"];
@@ -21,7 +20,6 @@ export default function TabLayout() {
   const { session, loading } = useAuth();
   const router = useRouter();
   const didRedirect = useRef(false);
-
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
@@ -40,7 +38,6 @@ export default function TabLayout() {
 
   if (loading || !session) return null;
 
-  // ✅ مهم: يضمن مساحة تحت التابات ومايتغطاش بأزرار أندرويد
   const bottomPad = Math.max(insets.bottom, Platform.OS === "android" ? 10 : 0);
   const tabHeight = 56 + bottomPad;
 
@@ -48,46 +45,51 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: useClientOnlyValue(false, true),
-
-        // ✅ ثابت Light حتى لو الثيم Dark
         tabBarActiveTintColor: THEME.primary,
         tabBarInactiveTintColor: THEME.gray[100],
-
         tabBarStyle: {
           backgroundColor: THEME.white.DEFAULT,
           borderTopColor: "#EDEDED",
           borderTopWidth: 1,
-
           height: tabHeight,
           paddingBottom: bottomPad,
           paddingTop: 8,
         },
-
         tabBarLabelStyle: {
           fontFamily: FONT.medium,
           fontSize: 11,
         },
       }}
     >
+      {/* hide group index route */}
       <Tabs.Screen name="index" options={{ href: null }} />
 
       <Tabs.Screen
-        name="menu"
+        name="home"
         options={{
-          title: "القائمة",
+          title: "الصفحة الرئيسية",
           headerShown: false,
-          tabBarIcon: ({ color }) => (
-            <TabBarIcon name="cutlery" color={color} />
-          ),
+          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
         }}
       />
 
       <Tabs.Screen
-        name="orders"
+        name="favorites"
         options={{
-          title: "الطلبات",
+          title: "المفضلة",
           headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="list" color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="heart" color={color} />,
+        }}
+      />
+
+      <Tabs.Screen
+        name="requests"
+        options={{
+          title: "التقديمات",
+          headerShown: false,
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon name="file-text" color={color} />
+          ),
         }}
       />
 

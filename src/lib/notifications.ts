@@ -8,9 +8,9 @@ import { supabase } from "./supabase";
 
 /**
  * Notes:
- * - registerForPushNotificationsAsync() is safe to call from the app.
- * - Sending push notifications SHOULD be done on a backend (Supabase Edge Function / Node),
- *   not from the client app, to avoid abuse.
+ * - registerForPushNotificationsAsync() safe to call from app.
+ * - Sending PUSH to other users/admins SHOULD be done from backend (Edge Function)
+ *   because RLS will block reading other users' tokens in production.
  */
 
 function handleRegistrationError(message: string): never {
@@ -52,7 +52,6 @@ async function getExpoTokenWithRetry(projectId: string, retries = 5) {
 export async function registerForPushNotificationsAsync(): Promise<string> {
   // Android channels (Android 8+)
   if (Platform.OS === "android") {
-    // Default channel (general)
     await Notifications.setNotificationChannelAsync("default", {
       name: "الإشعارات",
       importance: Notifications.AndroidImportance.MAX,
@@ -60,21 +59,19 @@ export async function registerForPushNotificationsAsync(): Promise<string> {
       lightColor: "#FF231F7C",
     });
 
-    // Orders channel (order updates)
-    await Notifications.setNotificationChannelAsync("orders", {
-      name: "تحديثات الطلبات",
+    // ✅ Real estate requests channel
+    await Notifications.setNotificationChannelAsync("requests", {
+      name: "طلبات واستفسارات العقارات",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#FF231F7C",
     });
   }
 
-  // Must be a physical device
   if (!Device.isDevice) {
     handleRegistrationError("لازم تستخدم موبايل حقيقي عشان الإشعارات تشتغل.");
   }
 
-  // Permissions
   const perm = await Notifications.getPermissionsAsync();
   let finalStatus = perm.status;
 
@@ -87,7 +84,6 @@ export async function registerForPushNotificationsAsync(): Promise<string> {
     handleRegistrationError("لم يتم منح صلاحيات الإشعارات.");
   }
 
-  // projectId is required for getExpoPushTokenAsync
   const projectId =
     Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
 
@@ -95,20 +91,19 @@ export async function registerForPushNotificationsAsync(): Promise<string> {
     handleRegistrationError("Project ID not found (extra.eas.projectId).");
   }
 
-  // Try Expo push token
   try {
     return await getExpoTokenWithRetry(projectId, 5);
   } catch (err: any) {
     const msg = typeof err?.message === "string" ? err.message : String(err);
     console.log("[push] Expo token failed:", msg);
 
-    // Debug-only fallback: try native device token (FCM) to diagnose issues
+    // Debug fallback: native token to diagnose
     try {
       const nativeToken = (await Notifications.getDevicePushTokenAsync()).data;
-      console.log("[push] Native device token (FCM):", nativeToken);
+      console.log("[push] Native device token:", nativeToken);
 
       handleRegistrationError(
-        "فشل استخراج Expo Push Token، لكن يوجد Native FCM Token. راجع إعدادات FCM / google-services.json."
+        "فشل استخراج Expo Push Token، لكن يوجد Native Token. راجع إعدادات FCM / google-services.json."
       );
     } catch (nativeErr: any) {
       const nativeMsg =
@@ -136,7 +131,7 @@ export async function sendPushNotification(
     data?: Record<string, any>;
     sound?: "default" | null;
     /** Android only (Expo): which channel to use */
-    channelId?: string;
+    channelId?: "default" | "requests";
   }
 ): Promise<ExpoPushTicket> {
   if (!isExpoPushToken(expoPushToken)) {
@@ -151,7 +146,6 @@ export async function sendPushNotification(
     data: opts?.data ?? {},
   };
 
-  // Expo supports channelId for Android
   if (opts?.channelId) message.channelId = opts.channelId;
 
   const res = await fetch("https://exp.host/--/api/v2/push/send", {
@@ -172,10 +166,7 @@ export async function sendPushNotification(
   const json = text ? JSON.parse(text) : {};
   const ticket: ExpoPushTicket | undefined = json?.data?.[0];
 
-  if (!ticket) {
-    throw new Error(`Unexpected Expo response: ${text}`);
-  }
-
+  if (!ticket) throw new Error(`Unexpected Expo response: ${text}`);
   if (ticket.status === "error") {
     throw new Error(
       `Expo push error: ${ticket.message ?? "Unknown"} | details: ${JSON.stringify(
@@ -193,10 +184,6 @@ export async function sendPushNotification(
 
 type ProfilePushTokenRow = { expo_push_token: string | null };
 
-/**
- * Fetch only the token column (less data, safer).
- * Returns null if not found or token missing.
- */
 export const getUserExpoPushToken = async (userId: string): Promise<string | null> => {
   const { data, error } = await supabase
     .from("profiles")
@@ -213,114 +200,160 @@ export const getUserExpoPushToken = async (userId: string): Promise<string | nul
   return typeof token === "string" && token.length > 0 ? token : null;
 };
 
+// ⚠️ IMPORTANT: reading ALL admin tokens from client will be blocked by RLS in production.
+// best: do this in Edge Function with service role.
+export const getAdminExpoPushTokens = async (): Promise<string[]> => {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("expo_push_token")
+    .eq("role", "admin");
+
+  if (error) {
+    console.log("[push] getAdminExpoPushTokens error:", error.message);
+    return [];
+  }
+
+  const tokens = (data ?? [])
+    .map((r: any) => r?.expo_push_token)
+    .filter((t: any) => isExpoPushToken(t)) as string[];
+
+  // unique
+  return Array.from(new Set(tokens));
+};
+
 // ----------------------------
-// Status normalization + messages
+// Requests: status normalization + messages
 // ----------------------------
 
-type NormalizedStatus = "new" | "cooking" | "delivering" | "delivered" | "canceled";
+export type NormalizedRequestStatus = "new" | "answered" | "closed";
 
 const normalizeStatus = (s: unknown): string => String(s ?? "").trim().toLowerCase();
 
-/**
- * Map whatever comes from DB/Admin UI (New/Cooking/Cancelled/Preparing/etc)
- * into one stable key for UI + notifications.
- */
-const toStatusKey = (raw: unknown): NormalizedStatus | null => {
+const toRequestStatusKey = (raw: unknown): NormalizedRequestStatus | null => {
   const s = normalizeStatus(raw);
-
   if (!s) return null;
 
-  // Accept both spellings
-  if (s === "canceled" || s === "cancelled") return "canceled";
-
-  // Accept synonyms
-  if (s === "preparing" || s === "preparation") return "cooking";
-
-  // Direct matches
   if (s === "new") return "new";
-  if (s === "cooking") return "cooking";
-  if (s === "delivering") return "delivering";
-  if (s === "delivered") return "delivered";
+  if (s === "answered") return "answered";
+  if (s === "closed") return "closed";
+
+  // accept some synonyms if you want:
+  if (s === "open") return "new";
+  if (s === "resolved") return "closed";
 
   return null;
 };
 
-/**
- * Arabic notification messages by normalized status key.
- */
-const STATUS_MESSAGE_AR: Record<NormalizedStatus, string> = {
+const REQUEST_STATUS_MESSAGE_AR: Record<NormalizedRequestStatus, string> = {
   new: "تم استلام طلبك ✅",
-  cooking: "جاري تجهيز طلبك 🍳",
-  delivering: "طلبك في الطريق 🚚",
-  delivered: "تم توصيل طلبك 🎉",
-  canceled: "تم إلغاء طلبك ❌",
+  answered: "تم الرد على طلبك 💬",
+  closed: "تم إغلاق الطلب ✅",
 };
 
-// If you ever want bilingual, keep this and switch later
-const STATUS_MESSAGE_EN: Record<NormalizedStatus, string> = {
-  new: "We received your order ✅",
-  cooking: "Your order is being prepared 🍳",
-  delivering: "Your order is on the way 🚚",
-  delivered: "Your order was delivered 🎉",
-  canceled: "Your order was canceled ❌",
+const REQUEST_STATUS_MESSAGE_EN: Record<NormalizedRequestStatus, string> = {
+  new: "We received your request ✅",
+  answered: "Your request has been answered 💬",
+  closed: "Your request has been closed ✅",
 };
 
-// Change this if you want EN
 const APP_LANG: "ar" | "en" = "ar";
 
-const STATUS_MESSAGE: Record<NormalizedStatus, string> =
-  APP_LANG === "ar" ? STATUS_MESSAGE_AR : STATUS_MESSAGE_EN;
+const REQUEST_STATUS_MESSAGE =
+  APP_LANG === "ar" ? REQUEST_STATUS_MESSAGE_AR : REQUEST_STATUS_MESSAGE_EN;
+
+// ----------------------------
+// Real-estate notifications
+// ----------------------------
 
 /**
- * Notify user about order update.
- * IMPORTANT: Best practice is to run this on a backend with service role.
+ * ✅ Notify USER when their request status changes (answered/closed)
+ * Use from backend/admin action (recommended).
  */
-export const notifyUserAboutOrderUpdate = async (
-  order: Tables<"orders">,
+export const notifyUserAboutRequestUpdate = async (
+  request: Tables<"requests">,
   newStatus: unknown
 ): Promise<ExpoPushTicket | null> => {
-  if (!order?.id) {
-    console.log("[push] Missing order id");
-    return null;
-  }
-  if (!order?.user_id) {
-    console.log("[push] No user_id for order:", order.id);
+  if (!request?.id) return null;
+
+  const userId = (request as any)?.user_id as string | null;
+  if (!userId) {
+    console.log("[push] request has no user_id:", request.id);
     return null;
   }
 
-  const key = toStatusKey(newStatus);
+  const key = toRequestStatusKey(newStatus);
   const rawStatus = String(newStatus ?? "");
 
-  const token = await getUserExpoPushToken(order.user_id);
+  const token = await getUserExpoPushToken(userId);
   if (!token) {
-    console.log("[push] No token for user:", order.user_id);
+    console.log("[push] No token for user:", userId);
     return null;
   }
 
-  const title = APP_LANG === "ar" ? "تحديث الطلب" : "Order update";
+  const title = APP_LANG === "ar" ? "تحديث الطلب" : "Request update";
   const body = key
-    ? STATUS_MESSAGE[key]
+    ? REQUEST_STATUS_MESSAGE[key]
     : APP_LANG === "ar"
     ? `تم تحديث حالة طلبك إلى: ${rawStatus}`
-    : `Your order is now: ${rawStatus}`;
+    : `Your request is now: ${rawStatus}`;
 
   try {
-    const ticket = await sendPushNotification(token, {
+    return await sendPushNotification(token, {
       title,
       body,
-      channelId: "orders",
+      channelId: "requests",
       data: {
-        type: "order_status_updated",
-        orderId: order.id,
+        type: "request_updated",
+        requestId: request.id,
+        propertyId: (request as any)?.property_id ?? null,
         status: rawStatus,
         status_normalized: key ?? "",
       },
     });
-
-    console.log("[push] Push sent:", ticket);
-    return ticket;
   } catch (e: any) {
-    console.log("[push] Failed to send push:", e?.message ?? String(e));
+    console.log("[push] Failed to send request update:", e?.message ?? String(e));
     return null;
   }
+};
+
+/**
+ * ✅ Notify ADMINS when a new request is created
+ * Use from backend trigger/edge function ideally.
+ */
+export const notifyAdminsAboutNewRequest = async (payload: {
+  requestId: string;
+  propertyId?: string | null;
+  phone?: string | null;
+}): Promise<void> => {
+  const tokens = await getAdminExpoPushTokens();
+  if (!tokens.length) {
+    console.log("[push] No admin tokens found.");
+    return;
+  }
+
+  const title = APP_LANG === "ar" ? "طلب جديد 📩" : "New request 📩";
+  const body =
+    APP_LANG === "ar"
+      ? "فيه عميل بعت استفسار جديد على عقار."
+      : "A new inquiry was submitted for a property.";
+
+  await Promise.all(
+    tokens.map(async (t) => {
+      try {
+        await sendPushNotification(t, {
+          title,
+          body,
+          channelId: "requests",
+          data: {
+            type: "request_created",
+            requestId: payload.requestId,
+            propertyId: payload.propertyId ?? null,
+            phone: payload.phone ?? null,
+          },
+        });
+      } catch (e: any) {
+        console.log("[push] admin push failed:", e?.message ?? String(e));
+      }
+    })
+  );
 };

@@ -4,6 +4,7 @@ import { supabase } from "@lib/supabase";
 import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef, type PropsWithChildren } from "react";
 import { useAuth } from "./AuthProvider";
+// import { useRouter } from "expo-router"; // ✅ لو هتعمل navigation من هنا
 
 // Foreground behavior
 Notifications.setNotificationHandler({
@@ -17,19 +18,19 @@ Notifications.setNotificationHandler({
 
 export default function NotificationProvider({ children }: PropsWithChildren) {
   const { session, profile } = useAuth();
+  // const router = useRouter(); // ✅ لو هتعمل navigation من هنا
 
-  // نخزن آخر userId اتسجل له توكن عشان ما نكررهاش
+  // منع تكرار تسجيل التوكن لنفس اليوزر
   const lastRegisteredUserIdRef = useRef<string | null>(null);
 
   // 1) Register + save token (per user)
   useEffect(() => {
     const userId = session?.user?.id;
-    const profileId = profile?.id;
+    const profileId = profile?.id; // غالبًا نفس userId
 
-    // لازم يبقى فيه session + profile
     if (!userId || !profileId) return;
 
-    // لو اتسجل قبل كده لنفس اليوزر: متعملش حاجة
+    // لو اتسجل قبل كده لنفس اليوزر
     if (lastRegisteredUserIdRef.current === userId) return;
 
     let cancelled = false;
@@ -39,35 +40,16 @@ export default function NotificationProvider({ children }: PropsWithChildren) {
         const token = await registerForPushNotificationsAsync();
         if (cancelled) return;
 
-        // 1) هات التوكن القديم من الـ profile
-        const { data: existing, error: readErr } = await supabase
-          .from("profiles")
-          .select("expo_push_token")
-          .eq("id", profileId)
-          .single();
-
-        if (cancelled) return;
-
-        if (readErr) {
-          console.log("[push] Failed to read existing token:", readErr.message);
-        }
-
-        const oldToken = (existing as any)?.expo_push_token ?? null;
-
-        // 2) لو نفس التوكن موجود -> خلاص
-        if (oldToken === token) {
-          lastRegisteredUserIdRef.current = userId;
-          return;
-        }
-
-        // 3) خزّن التوكن الجديد
-        const { error: upErr } = await supabase
+        // ✅ Update فقط (بدون upsert) عشان TS ما يطلبش full_name/phone
+        const { error } = await supabase
           .from("profiles")
           .update({ expo_push_token: token })
           .eq("id", profileId);
 
-        if (upErr) {
-          console.log("[push] Failed to save token:", upErr.message);
+        if (cancelled) return;
+
+        if (error) {
+          console.log("[push] Failed to save token:", error.message);
           return;
         }
 
@@ -95,6 +77,27 @@ export default function NotificationProvider({ children }: PropsWithChildren) {
     const n2 = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         console.log("[push] Notification response:", response);
+
+        const data: any = response?.notification?.request?.content?.data ?? {};
+        const type = String(data?.type ?? "");
+
+        // ⚠️ اختياري: لو عايز تفتح صفحات من هنا
+        // لو أنت بتعمل ده في hook تاني -> سيب ده مقفول
+        /*
+        if (type === "request" && data?.requestId) {
+          router.push({
+            pathname: "/(admin)/requests/[id]",
+            params: { id: String(data.requestId) },
+          });
+        }
+
+        if (type === "property" && data?.propertyId) {
+          router.push({
+            pathname: "/(admin)/home/[id]",
+            params: { id: String(data.propertyId) },
+          });
+        }
+        */
       }
     );
 
@@ -104,7 +107,7 @@ export default function NotificationProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
-  // 3) Reset on logout (so next login registers again)
+  // 3) Reset on logout
   useEffect(() => {
     if (!session?.user?.id) {
       lastRegisteredUserIdRef.current = null;

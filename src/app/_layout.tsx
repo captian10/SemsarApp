@@ -8,7 +8,6 @@ import "react-native-reanimated";
 
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import CartProvider from "@providers/CartProvider";
 import NotificationProvider from "@providers/NotificationProvider";
 import QueryProvider from "@providers/QueryProvider";
 import AuthProvider from "../providers/AuthProvider";
@@ -63,7 +62,6 @@ function RootLayoutNav() {
         <AuthProvider>
           <QueryProvider>
             <NotificationProvider>
-              <CartProvider>
                 <Stack
                   screenOptions={{
                     headerShown: false,
@@ -73,9 +71,7 @@ function RootLayoutNav() {
                   <Stack.Screen name="(admin)" />
                   <Stack.Screen name="(user)" />
                   <Stack.Screen name="(auth)" />
-                  <Stack.Screen name="cart" options={{ presentation: "modal" }} />
                 </Stack>
-              </CartProvider>
             </NotificationProvider>
           </QueryProvider>
         </AuthProvider>
