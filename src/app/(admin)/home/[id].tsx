@@ -2,8 +2,10 @@
 // ✅ Admin Property Details Screen (1:1 image + buttons next to each other)
 
 import { useDeleteProperty, useProperty } from "@api/properties";
+import { usePropertyContact } from "@api/property-contacts";
 import RemoteImage from "@components/RemoteImage";
 import { FontAwesome } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import { Link, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
@@ -32,6 +34,11 @@ const statusLabels: Record<string, string> = {
   hidden: "مخفي",
 };
 
+const safeText = (v: unknown, fallback = "—") => {
+  const s = String(v ?? "").trim();
+  return s.length ? s : fallback;
+};
+
 export default function AdminPropertyDetailsScreen() {
   const router = useRouter();
   const { id: idParam } = useLocalSearchParams();
@@ -44,6 +51,9 @@ export default function AdminPropertyDetailsScreen() {
   const { data: property, error, isLoading, refetch } = useProperty(id);
   const { mutate: deleteProperty, isPending: isDeleting } = useDeleteProperty();
 
+  // ✅ contact info (Admin-only by RLS)
+  const { data: contact } = usePropertyContact(id);
+
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -55,6 +65,13 @@ export default function AdminPropertyDetailsScreen() {
     }
   };
 
+  const copyText = async (text: string, title = "تم النسخ") => {
+    const v = String(text ?? "").trim();
+    if (!v) return;
+    await Clipboard.setStringAsync(v);
+    Alert.alert(title, `تم نسخ: ${v}`);
+  };
+
   const priceText = useMemo(() => {
     const p = Number(property?.price);
     if (!Number.isFinite(p)) return "0";
@@ -62,7 +79,7 @@ export default function AdminPropertyDetailsScreen() {
   }, [property?.price]);
 
   const currencyText = useMemo(() => {
-    const c = String(property?.currency ?? "EGP").toUpperCase();
+    const c = String(property?.currency ?? "EGP").trim().toUpperCase();
     if (c === "EGP") return "جنيه";
     return c;
   }, [property?.currency]);
@@ -89,14 +106,26 @@ export default function AdminPropertyDetailsScreen() {
     return [city, address].filter(Boolean).join("، ");
   }, [property?.city, property?.address]);
 
+  // ✅ optional specs: hide if null/0
   const specsText = useMemo(() => {
-    const bedrooms =
-      property?.bedrooms != null ? `${property.bedrooms} غرف` : "";
-    const bathrooms =
-      property?.bathrooms != null ? `${property.bathrooms} حمامات` : "";
-    const area = property?.area_sqm != null ? `${property.area_sqm} م²` : "";
+    const b = Number(property?.bedrooms ?? 0);
+    const ba = Number(property?.bathrooms ?? 0);
+    const a = Number(property?.area_sqm ?? 0);
+
+    const bedrooms = Number.isFinite(b) && b > 0 ? `${b} غرف` : "";
+    const bathrooms = Number.isFinite(ba) && ba > 0 ? `${ba} حمامات` : "";
+    const area = Number.isFinite(a) && a > 0 ? `${a} م²` : "";
+
     return [bedrooms, bathrooms, area].filter(Boolean).join(" • ") || "—";
   }, [property?.bedrooms, property?.bathrooms, property?.area_sqm]);
+
+  // ✅ owner contact (optional)
+  const ownerName = useMemo(() => safeText(contact?.owner_name, ""), [contact]);
+  const ownerPhone = useMemo(() => safeText(contact?.owner_phone, ""), [contact]);
+  const hasOwner = useMemo(
+    () => Boolean(ownerName.trim() || ownerPhone.trim()),
+    [ownerName, ownerPhone]
+  );
 
   const onDelete = () => {
     if (!id || isDeleting) return;
@@ -263,13 +292,63 @@ export default function AdminPropertyDetailsScreen() {
           <Text style={styles.sectionTitle}>المواصفات</Text>
           <Text style={styles.sub}>{specsText}</Text>
 
+          {/* ✅ Owner contact (Admin only) */}
+          {hasOwner && (
+            <>
+              <Text style={styles.sectionTitle}>صاحب العقار</Text>
+
+              <View style={styles.ownerCard}>
+                {!!ownerName.trim() && (
+                  <View style={styles.ownerRow}>
+                    <Text style={styles.ownerLabel}>الاسم</Text>
+
+                    <Pressable
+                      onPress={() => copyText(ownerName, "تم نسخ الاسم")}
+                      onLongPress={() => copyText(ownerName, "تم نسخ الاسم")}
+                      style={({ pressed }) => [
+                        styles.ownerValuePress,
+                        pressed && styles.pressed,
+                      ]}
+                      accessibilityLabel="نسخ اسم صاحب العقار"
+                    >
+                      <View style={styles.ownerValueRow}>
+                        <Text style={styles.ownerValue}>{ownerName}</Text>
+                        <FontAwesome name="copy" size={14} color={THEME.primary} />
+                      </View>
+                    </Pressable>
+                  </View>
+                )}
+
+                {!!ownerPhone.trim() && (
+                  <View style={styles.ownerRow}>
+                    <Text style={styles.ownerLabel}>الرقم</Text>
+
+                    <Pressable
+                      onPress={() => copyText(ownerPhone, "تم نسخ رقم الموبايل")}
+                      onLongPress={() => copyText(ownerPhone, "تم نسخ رقم الموبايل")}
+                      style={({ pressed }) => [
+                        styles.ownerValuePress,
+                        pressed && styles.pressed,
+                      ]}
+                      accessibilityLabel="نسخ رقم صاحب العقار"
+                    >
+                      <View style={styles.ownerValueRow}>
+                        <Text style={styles.ownerValue}>{ownerPhone}</Text>
+                        <FontAwesome name="copy" size={14} color={THEME.primary} />
+                      </View>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            </>
+          )}
+
           <Text style={styles.subHint}>
             يمكنك تعديل العقار من زر القلم بالأعلى.
           </Text>
 
-          {/* ✅ Buttons next to each other (RTL: right-to-left) */}
+          {/* ✅ Buttons next to each other */}
           <View style={styles.actions}>
-            {/* تعديل */}
             <Pressable
               onPress={() =>
                 router.push({
@@ -286,7 +365,6 @@ export default function AdminPropertyDetailsScreen() {
               <Text style={styles.actionBtnText}>تعديل</Text>
             </Pressable>
 
-            {/* حذف */}
             <Pressable
               onPress={isDeleting ? undefined : confirmDelete}
               style={({ pressed }) => [
@@ -332,11 +410,21 @@ type Styles = {
   metaPill: ViewStyle;
   metaLabel: TextStyle;
   metaValue: TextStyle;
+
+  ownerCard: ViewStyle;
+  ownerRow: ViewStyle;
+  ownerLabel: TextStyle;
+  ownerValue: TextStyle;
+  ownerValuePress: ViewStyle;
+  ownerValueRow: ViewStyle;
+
   actions: ViewStyle;
   actionBtn: ViewStyle;
   actionBtnText: TextStyle;
   deleteBtn: ViewStyle;
   deleteBtnText: TextStyle;
+
+  pressed: ViewStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -399,7 +487,6 @@ const styles = StyleSheet.create<Styles>({
     elevation: 3,
   },
 
-  // ✅ 1:1 ratio
   image: { width: "100%", aspectRatio: 1, borderRadius: 16 },
 
   badge: {
@@ -491,7 +578,40 @@ const styles = StyleSheet.create<Styles>({
   metaLabel: { fontSize: 12, color: THEME.gray[100], fontFamily: FONT.medium },
   metaValue: { fontSize: 13, color: THEME.dark[100], fontFamily: FONT.bold },
 
-  // ✅ keep buttons next to each other
+  // ✅ owner card
+  ownerCard: {
+    backgroundColor: "rgba(15,23,42,0.03)",
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.08)",
+    borderRadius: 16,
+    padding: 12,
+    gap: 10,
+  },
+  ownerRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  ownerLabel: {
+    fontSize: 12,
+    fontFamily: FONT.medium,
+    color: THEME.gray[100],
+  },
+  ownerValue: {
+    fontSize: 14,
+    fontFamily: FONT.bold,
+    color: THEME.dark[100],
+    textAlign: "right",
+  },
+  ownerValuePress: { flex: 1 },
+  ownerValueRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    gap: 8,
+  },
+
   actions: {
     flexDirection: "row-reverse",
     gap: 12,
@@ -515,4 +635,6 @@ const styles = StyleSheet.create<Styles>({
     alignItems: "center",
   },
   deleteBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
+
+  pressed: { opacity: 0.9 },
 });

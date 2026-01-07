@@ -21,11 +21,7 @@ import { FONT } from "@/constants/Typography";
 import RemoteImage from "@components/RemoteImage";
 import { THEME } from "@constants/Colors";
 
-import {
-  statusLabel,
-  usePropertyWithImages,
-  type PropertyRow,
-} from "@api/properties";
+import { usePropertyWithImages, type PropertyRow } from "@api/properties";
 import { defaultPropertyImage } from "@components/PropertyCard";
 
 const formatMoney = (n: unknown) => {
@@ -64,9 +60,7 @@ function SmartImage({
 
   // ✅ لو URL كامل → استخدم Image مباشرة
   if (isHttpUrl(src)) {
-    return (
-      <Image source={{ uri: src }} style={style} resizeMode={resizeMode} />
-    );
+    return <Image source={{ uri: src }} style={style} resizeMode={resizeMode} />;
   }
 
   // ✅ غير كده اعتبره storage path → RemoteImage
@@ -80,6 +74,28 @@ function SmartImage({
   );
 }
 
+const hasPositiveNumber = (v: unknown) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0;
+};
+
+// ✅ label + color for status (exactly as you want)
+const statusLabelAr = (s: unknown) => {
+  const v = String(s ?? "").trim().toLowerCase();
+  if (v === "available") return "متاح";
+  if (v === "rented") return "للإيجار";
+  if (v === "sold") return "للبيع";
+  return "—";
+};
+
+const statusColor = (s: unknown) => {
+  const v = String(s ?? "").trim().toLowerCase();
+  if (v === "available") return THEME.primary;
+  if (v === "rented") return "#EF4444";
+  if (v === "sold") return "#22C55E";
+  return THEME.dark?.[100] ?? "#0F172A";
+};
+
 export default function PropertyDetailsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
@@ -90,13 +106,8 @@ export default function PropertyDetailsScreen() {
     return (Array.isArray(raw) ? raw[0] : raw) as string | undefined;
   }, [params]);
 
-  const {
-    data: property,
-    error,
-    isLoading,
-    refetch,
-    isFetching,
-  } = usePropertyWithImages(id || "");
+  const { data: property, error, isLoading, refetch, isFetching } =
+    usePropertyWithImages(id || "");
 
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -133,14 +144,17 @@ export default function PropertyDetailsScreen() {
     () => safeText((property as any)?.address, ""),
     [property]
   );
+
   const type = useMemo(
     () => safeText((property as any)?.property_type, "—"),
     [property]
   );
-  const status = useMemo(
-    () => statusLabel((property as any)?.status),
-    [property]
-  );
+
+  // ✅ status label + color
+  const statusValue = useMemo(() => (property as any)?.status, [property]);
+  const status = useMemo(() => statusLabelAr(statusValue), [statusValue]);
+  const statusClr = useMemo(() => statusColor(statusValue), [statusValue]);
+
   const description = useMemo(
     () => safeText((property as any)?.description, "لا يوجد وصف."),
     [property]
@@ -250,15 +264,14 @@ export default function PropertyDetailsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.content,
-          // ✅ مساحة للبوتوم بار
           { paddingBottom: 170 + insets.bottom },
         ]}
       >
         {/* Gallery */}
         <View style={styles.galleryCard}>
           <FlatList
-            style={{ width: "100%" }} // ✅ مهم
-            contentContainerStyle={{ width: "100%" }} // ✅ مهم
+            style={{ width: "100%" }}
+            contentContainerStyle={{ width: "100%" }}
             data={images}
             keyExtractor={(_, idx) => `img-${idx}`}
             horizontal
@@ -315,15 +328,17 @@ export default function PropertyDetailsScreen() {
           {/* Meta pills */}
           <View style={styles.metaRow}>
             <MetaPill icon="tag" text={type} />
-            <MetaPill icon="info-circle" text={status} />
 
-            {Number.isFinite(Number(area)) && (
+            {/* ✅ colored status */}
+            <MetaPill icon="info-circle" text={status} color={statusClr} />
+
+            {hasPositiveNumber(area) && (
               <MetaPill icon="arrows-alt" text={`${Number(area)} م²`} />
             )}
-            {Number.isFinite(Number(bedrooms)) && (
+            {hasPositiveNumber(bedrooms) && (
               <MetaPill icon="bed" text={`${Number(bedrooms)} غرف`} />
             )}
-            {Number.isFinite(Number(bathrooms)) && (
+            {hasPositiveNumber(bathrooms) && (
               <MetaPill icon="bath" text={`${Number(bathrooms)} حمام`} />
             )}
           </View>
@@ -336,7 +351,7 @@ export default function PropertyDetailsScreen() {
         </View>
       </ScrollView>
 
-      {/* ✅ Bottom bar (يلزق في آخر الشاشة) */}
+      {/* Bottom bar */}
       <View style={styles.bottom} pointerEvents="box-none">
         <View style={styles.bottomCard} pointerEvents="auto">
           <View style={styles.bottomRow}>
@@ -344,7 +359,6 @@ export default function PropertyDetailsScreen() {
             <Text style={styles.bottomValue}>{priceText}</Text>
           </View>
 
-          {/* ✅ زرارين فقط: اتصال + واتساب (بدون نسخ) */}
           <View style={styles.bottomBtns}>
             <Pressable
               onPress={() => dial(AGENT_PHONE)}
@@ -362,6 +376,7 @@ export default function PropertyDetailsScreen() {
                 styles.bottomBtnGhost,
                 pressed && styles.pressed,
               ]}
+              onLongPress={() => copy(AGENT_PHONE, "تم نسخ الرقم")} // ✅ long press copy (optional)
             >
               <View style={styles.waRow}>
                 <FontAwesome name="whatsapp" size={16} color="#25D366" />
@@ -369,6 +384,9 @@ export default function PropertyDetailsScreen() {
               </View>
             </Pressable>
           </View>
+
+          {/* ✅ small hint to copy */}
+          <Text style={styles.copyHint}>اضغط مطوّلًا على زر واتساب لنسخ الرقم</Text>
         </View>
       </View>
     </View>
@@ -377,11 +395,26 @@ export default function PropertyDetailsScreen() {
 
 /* ---------- small components ---------- */
 
-function MetaPill({ icon, text }: { icon: any; text: string }) {
+function MetaPill({
+  icon,
+  text,
+  color,
+}: {
+  icon: any;
+  text: string;
+  color?: string;
+}) {
   return (
     <View style={styles.metaPill}>
-      <FontAwesome name={icon} size={12} color={THEME.dark[100]} />
-      <Text style={styles.metaText} numberOfLines={1}>
+      <FontAwesome
+        name={icon}
+        size={12}
+        color={color ?? THEME.dark[100]}
+      />
+      <Text
+        style={[styles.metaText, color ? { color } : null]}
+        numberOfLines={1}
+      >
         {text}
       </Text>
     </View>
@@ -559,13 +592,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // ✅ Bottom bar
+  // Bottom bar
   bottom: { position: "absolute", left: 12, right: 12, bottom: 12 },
   bottomCard: {
     backgroundColor: "rgba(255,255,255,0.95)",
     borderRadius: 22,
     padding: 12,
-    gap: 12,
+    gap: 10,
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.06)",
     shadowColor: "#000",
@@ -621,5 +654,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+  },
+
+  copyHint: {
+    textAlign: "right",
+    color: THEME.gray[100],
+    fontFamily: FONT.regular,
+    fontSize: 11,
   },
 });

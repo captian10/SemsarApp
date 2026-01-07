@@ -1,5 +1,6 @@
 // src/api/properties.ts
 import { supabase } from "@lib/supabase";
+import { THEME } from "@constants/Colors";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 type PgErrorLike = {
@@ -18,41 +19,52 @@ const toThrowingError = (e: PgErrorLike): Error => {
 };
 
 // ✅ Property Types
-export const PROPERTY_TYPES = [
-  "شقة",
-  "محل",
-  "مخزن",
-  "أرض",
-  "غير ذلك",
-] as const;
-
+export const PROPERTY_TYPES = ["شقة", "محل", "مخزن", "أرض", "غير ذلك"] as const;
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
-// ✅ DB status values (ENGLISH) — Recommended
+// ✅ DB status values (ENGLISH)
 export const PROPERTY_STATUS = ["available", "sold", "rented"] as const;
 export type PropertyStatus = (typeof PROPERTY_STATUS)[number];
 
-// ✅ UI labels (AR) — For display only
+// ✅ UI labels (AR) — For display only (legacy)
 export const STATUS_AR: Record<PropertyStatus, string> = {
   available: "متاح",
   sold: "بيع تمليك",
   rented: "ايجار",
 };
 
-// ✅ Useful for dropdowns/filters in UI
+// ✅ Useful for dropdowns/filters in UI (legacy)
 export const STATUS_OPTIONS: Array<{ label: string; value: PropertyStatus }> = [
   { label: "متاح", value: "available" },
   { label: "بيع تمليك", value: "sold" },
   { label: "ايجار", value: "rented" },
 ];
 
-// ✅ Safe label (handles unknown values)
+// ✅ Safe label (handles unknown values) — legacy
 export const statusLabel = (s: unknown) => {
   const v = String(s ?? "").trim().toLowerCase();
   if (v === "available") return "متاح";
   if (v === "sold") return "بيع تمليك";
   if (v === "rented") return "ايجار";
   return "—";
+};
+
+// ✅ Label exactly as you want in [id]
+export const statusLabelAr = (s: unknown) => {
+  const v = String(s ?? "").trim().toLowerCase();
+  if (v === "available") return "متاح";
+  if (v === "rented") return "للإيجار";
+  if (v === "sold") return "للبيع";
+  return "—";
+};
+
+// ✅ Color exactly as you want in [id]
+export const statusColor = (s: unknown) => {
+  const v = String(s ?? "").trim().toLowerCase();
+  if (v === "available") return THEME.primary; // متاح
+  if (v === "rented") return "#EF4444"; // للإيجار
+  if (v === "sold") return "#22C55E"; // للبيع
+  return THEME.gray?.[100] ?? "#64748B";
 };
 
 // ✅ Joined image row
@@ -81,7 +93,9 @@ export type PropertyRow = {
   area_sqm: number | null;
 
   property_type: PropertyType | string | null;
-  status: PropertyStatus | (string & {}); // ✅ keep flexible if DB has older values
+
+  // ✅ keep flexible if DB has older values
+  status: PropertyStatus | (string & {});
 
   cover_image: string | null;
   created_at: string;
@@ -151,8 +165,10 @@ export const usePropertyList = (filters?: PropertyListFilters) => {
         .order("created_at", { ascending: false });
 
       if (keyFilters.city) q = q.ilike("city", `%${keyFilters.city}%`);
-      if (typeof keyFilters.minPrice === "number") q = q.gte("price", keyFilters.minPrice);
-      if (typeof keyFilters.maxPrice === "number") q = q.lte("price", keyFilters.maxPrice);
+      if (typeof keyFilters.minPrice === "number")
+        q = q.gte("price", keyFilters.minPrice);
+      if (typeof keyFilters.maxPrice === "number")
+        q = q.lte("price", keyFilters.maxPrice);
       if (keyFilters.type) q = q.eq("property_type", keyFilters.type);
       if (keyFilters.status) q = q.eq("status", keyFilters.status);
 
@@ -223,7 +239,9 @@ export const usePropertyWithImages = (id: string) => {
               sort_order: r.sort_order ?? 0,
               created_at: String(r.created_at),
             }))
-            .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+            .sort(
+              (a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
+            )
         : [];
 
       const normalized: PropertyRow = {

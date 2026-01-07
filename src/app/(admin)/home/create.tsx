@@ -10,6 +10,12 @@ import {
   type PropertyStatus,
   type PropertyType,
 } from "@api/properties";
+
+import {
+  usePropertyContact,
+  useUpsertPropertyContact,
+} from "@api/property-contacts";
+
 import { THEME } from "@constants/Colors";
 import { supabase } from "@lib/supabase";
 import { decode } from "base64-arraybuffer";
@@ -17,7 +23,14 @@ import { randomUUID } from "expo-crypto";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import React, { memo, useEffect, useMemo, useReducer, useState } from "react";
+import React, {
+  memo,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   Image,
@@ -91,7 +104,6 @@ function getContentType(fileExt: string) {
 function getImagesMediaTypes(): any {
   const MT = (ImagePicker as any).MediaType;
   if (MT?.Images) return [MT.Images];
-  // fallback for older versions
   return ["images"];
 }
 
@@ -99,6 +111,8 @@ function isRlsError(err: any) {
   const msg = String(err?.message ?? "").toLowerCase();
   return msg.includes("row-level security") || msg.includes("rls");
 }
+
+const digitsOnly = (s: string) => String(s ?? "").replace(/\D/g, "");
 
 type FormData = {
   coverImage: string | null;
@@ -114,6 +128,10 @@ type FormData = {
   bathrooms: string;
   area: string;
 
+  // ✅ owner contact (admin-only; stored in property_contacts)
+  ownerName: string;
+  ownerPhone: string;
+
   propertyType: PropertyType;
   status: PropertyStatus;
 };
@@ -127,12 +145,16 @@ const initialFormData: FormData = {
   title: "",
   description: "",
   price: "",
-  currency: "جنيه", // ✅ بدل EGP
+  currency: "جنيه",
   city: "",
   address: "",
   bedrooms: "",
   bathrooms: "",
   area: "",
+
+  ownerName: "",
+  ownerPhone: "",
+
   propertyType: (PROPERTY_TYPES?.[0] ?? "شقة") as PropertyType,
   status: "available",
 };
@@ -164,7 +186,7 @@ const Field = memo(function Field({
   onChangeText: (t: string) => void;
   placeholder: string;
   loading: boolean;
-  keyboardType?: "default" | "numeric" | "decimal-pad";
+  keyboardType?: "default" | "numeric" | "decimal-pad" | "phone-pad";
   multiline?: boolean;
   numberOfLines?: number;
   accessibilityLabel?: string;
@@ -226,9 +248,7 @@ const PriceInput = memo(function PriceInput({
         />
 
         <View style={styles.currencyPill}>
-          <Text style={styles.currencyText}>
-            {String(currency || "جنيه")} {/* ✅ بدون Uppercase */}
-          </Text>
+          <Text style={styles.currencyText}>{String(currency || "جنيه")}</Text>
         </View>
       </View>
     </View>
@@ -350,11 +370,20 @@ export default function CreatePropertyScreen() {
   const { mutate: deleteProperty } = useDeleteProperty();
   const { data: updatingProperty } = useProperty(isUpdating ? id : "");
 
+  // ✅ owner contact hooks (admin-only by RLS)
+  const { data: contact } = usePropertyContact(isUpdating ? id : "");
+  const { mutateAsync: upsertContact } = useUpsertPropertyContact();
+
   // form state
   const [formData, dispatchForm] = useReducer(formReducer, initialFormData);
 
-  // ✅ specs section toggle
+  // ✅ sections toggle
   const [showSpecs, setShowSpecs] = useState(false);
+  const [showOwner, setShowOwner] = useState(false);
+
+  // refs to manage edit init
+  const contactHadRowRef = useRef(false);
+  const didInitContactRef = useRef(false);
 
   // errors and loading
   const [errors, setErrors] = useState<string[]>([]);
@@ -367,7 +396,6 @@ export default function CreatePropertyScreen() {
 
     if (isLocalUri(c) || isHttpUrl(c)) return { uri: c };
 
-    // assume it's a storage path
     const { data } = supabase.storage.from(BUCKET).getPublicUrl(c);
     return data?.publicUrl ? { uri: data.publicUrl } : DEFAULT_IMAGE_SOURCE;
   }, [formData.coverImage]);
@@ -395,7 +423,7 @@ export default function CreatePropertyScreen() {
     dispatchForm({
       type: "UPDATE_FIELD",
       field: "currency",
-      value: updatingProperty.currency ?? "جنيه", // ✅
+      value: updatingProperty.currency ?? "جنيه",
     });
     dispatchForm({
       type: "UPDATE_FIELD",
@@ -418,11 +446,18 @@ export default function CreatePropertyScreen() {
       updatingProperty.area_sqm != null ? String(updatingProperty.area_sqm) : "";
 
     dispatchForm({ type: "UPDATE_FIELD", field: "bedrooms", value: bedrooms });
-    dispatchForm({ type: "UPDATE_FIELD", field: "bathrooms", value: bathrooms });
+    dispatchForm({
+      type: "UPDATE_FIELD",
+      field: "bathrooms",
+      value: bathrooms,
+    });
     dispatchForm({ type: "UPDATE_FIELD", field: "area", value: area });
 
-    // ✅ لو فيه مواصفات قديمة افتح القسم تلقائي
-    if ((bedrooms && bedrooms.trim()) || (bathrooms && bathrooms.trim()) || (area && area.trim())) {
+    if (
+      (bedrooms && bedrooms.trim()) ||
+      (bathrooms && bathrooms.trim()) ||
+      (area && area.trim())
+    ) {
       setShowSpecs(true);
     }
 
@@ -431,7 +466,7 @@ export default function CreatePropertyScreen() {
       field: "propertyType",
       value: (PROPERTY_TYPES.includes(updatingProperty.property_type as any)
         ? updatingProperty.property_type
-        : (PROPERTY_TYPES?.[0] ?? "شقة")) as PropertyType,
+        : PROPERTY_TYPES?.[0] ?? "شقة") as PropertyType,
     });
     dispatchForm({
       type: "UPDATE_FIELD",
@@ -447,9 +482,35 @@ export default function CreatePropertyScreen() {
     });
   }, [updatingProperty]);
 
+  // ✅ init contact once on edit
+  useEffect(() => {
+    if (!isUpdating) return;
+    if (didInitContactRef.current) return;
+
+    // hook returns null when no row exists
+    if (contact === undefined) return;
+
+    didInitContactRef.current = true;
+
+    if (contact?.property_id) {
+      contactHadRowRef.current = true;
+
+      const n = String(contact.owner_name ?? "");
+      const p = String(contact.owner_phone ?? "");
+
+      dispatchForm({ type: "UPDATE_FIELD", field: "ownerName", value: n });
+      dispatchForm({ type: "UPDATE_FIELD", field: "ownerPhone", value: p });
+
+      if (n.trim() || p.trim()) setShowOwner(true);
+    }
+  }, [isUpdating, contact]);
+
   const resetFields = () => {
     dispatchForm({ type: "RESET" });
     setShowSpecs(false);
+    setShowOwner(false);
+    didInitContactRef.current = false;
+    contactHadRowRef.current = false;
   };
 
   const validateInput = () => {
@@ -466,7 +527,7 @@ export default function CreatePropertyScreen() {
     else if (p <= 0) newErrors.push("السعر يجب أن يكون أكبر من 0");
     else if (p > 1e10) newErrors.push("السعر كبير جدًا");
 
-    // ✅ المواصفات اختيارية: نتحقق فقط لو المستخدم كتب قيمة
+    // ✅ specs optional
     if (formData.bedrooms.trim()) {
       const b = toIntOrNull(formData.bedrooms);
       if (b == null) newErrors.push("عدد الغرف غير صحيح");
@@ -483,6 +544,12 @@ export default function CreatePropertyScreen() {
       const a = toFloatOrNull(formData.area);
       if (a == null) newErrors.push("المساحة غير صحيحة");
       else if (a <= 0 || a > 1e6) newErrors.push("المساحة غير منطقية");
+    }
+
+    // ✅ owner phone optional (basic validation)
+    if (formData.ownerPhone.trim()) {
+      const d = digitsOnly(formData.ownerPhone);
+      if (d.length < 7) newErrors.push("رقم موبايل صاحب العقار غير صحيح");
     }
 
     if (!formData.propertyType) newErrors.push("اختر نوع العقار");
@@ -513,9 +580,10 @@ export default function CreatePropertyScreen() {
     const selected = result.assets?.[0];
     if (!selected?.uri) return;
 
-    // ✅ reliable size check
     try {
-      const info = await FileSystem.getInfoAsync(selected.uri, { size: true } as any);
+      const info = await FileSystem.getInfoAsync(selected.uri, {
+        size: true,
+      } as any);
       const size = (info as any)?.size as number | undefined;
       if (typeof size === "number" && size > MAX_IMAGE_BYTES) {
         Alert.alert("خطأ", "الصورة كبيرة جدًا. اختر صورة أقل من 7MB.");
@@ -560,7 +628,9 @@ export default function CreatePropertyScreen() {
     const { data: sess } = await supabase.auth.getSession();
     const uid = sess.session?.user?.id ?? null;
     if (!uid) {
-      throw new Error("أنت غير مسجل دخول (auth.uid() = null). اعمل Login من جديد.");
+      throw new Error(
+        "أنت غير مسجل دخول (auth.uid() = null). اعمل Login من جديد."
+      );
     }
 
     const payload: any = {
@@ -568,12 +638,11 @@ export default function CreatePropertyScreen() {
       description: formData.description.trim() || null,
 
       price: round2(toFloatOrNull(formData.price) ?? 0),
-      currency: formData.currency.trim() || "جنيه", // ✅
+      currency: formData.currency.trim() || "جنيه",
 
       city: formData.city.trim() || null,
       address: formData.address.trim() || null,
 
-      // ✅ optional -> null when empty
       bedrooms: toIntOrNull(formData.bedrooms),
       bathrooms: toIntOrNull(formData.bathrooms),
       area_sqm: (() => {
@@ -587,10 +656,33 @@ export default function CreatePropertyScreen() {
       cover_image: finalCover,
     };
 
-    // ✅ satisfy your insert policy too
     if (!isUpdating) payload.created_by = uid;
 
     return payload;
+  };
+
+  // ✅ sync owner contact after saving property
+  const syncOwnerContact = async (propertyId: string) => {
+    const owner_name = formData.ownerName.trim() || null;
+    const owner_phone = formData.ownerPhone.trim() || null;
+
+    // if user entered something -> upsert
+    if (owner_name || owner_phone) {
+      await upsertContact({ property_id: propertyId, owner_name, owner_phone });
+      contactHadRowRef.current = true;
+      return;
+    }
+
+    // if clearing existing row on update -> delete it
+    if (isUpdating && contactHadRowRef.current) {
+      const { error } = await supabase
+        .from("property_contacts")
+        .delete()
+        .eq("property_id", propertyId);
+
+      if (error) throw new Error(error.message);
+      contactHadRowRef.current = false;
+    }
   };
 
   const onCreate = async () => {
@@ -607,11 +699,17 @@ export default function CreatePropertyScreen() {
 
       const payload = await buildPayload(coverPath);
 
-      insertProperty(payload, {
-        onSuccess: () => {
-          resetFields();
-          setLoading(false);
-          router.back();
+      insertProperty(payload as any, {
+        onSuccess: async (row: any) => {
+          try {
+            await syncOwnerContact(String(row?.id));
+            resetFields();
+            setLoading(false);
+            router.back();
+          } catch (e: any) {
+            setLoading(false);
+            setErrors([e?.message || "فشل حفظ بيانات صاحب العقار"]);
+          }
         },
         onError: (err: any) => {
           setLoading(false);
@@ -638,15 +736,20 @@ export default function CreatePropertyScreen() {
       }
 
       const payload = await buildPayload(finalCover);
-
       delete payload.created_by;
 
       updateProperty(
-        { id, ...payload },
+        { id, ...payload } as any,
         {
-          onSuccess: () => {
-            setLoading(false);
-            router.back();
+          onSuccess: async (row: any) => {
+            try {
+              await syncOwnerContact(String(row?.id ?? id));
+              setLoading(false);
+              router.back();
+            } catch (e: any) {
+              setLoading(false);
+              setErrors([e?.message || "فشل حفظ بيانات صاحب العقار"]);
+            }
           },
           onError: (err: any) => {
             setLoading(false);
@@ -828,6 +931,58 @@ export default function CreatePropertyScreen() {
               placeholder="مثال: شارع أحمد عرابي – المهندسين"
               loading={loading}
             />
+
+            {/* ✅ Owner Contact (Admin only) */}
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHint}>صاحب العقار (للأدمن فقط)</Text>
+
+              <Pressable
+                onPress={() => setShowOwner((p) => !p)}
+                style={({ pressed }) => [
+                  styles.specToggle,
+                  pressed && styles.pressed,
+                  loading && styles.disabled,
+                ]}
+                disabled={loading}
+              >
+                <Text style={styles.specToggleText}>
+                  {showOwner ? "إخفاء" : "إضافة"}
+                </Text>
+              </Pressable>
+            </View>
+
+            {showOwner && (
+              <>
+                <Field
+                  label="اسم صاحب العقار (اختياري)"
+                  value={formData.ownerName}
+                  onChangeText={(v) =>
+                    dispatchForm({
+                      type: "UPDATE_FIELD",
+                      field: "ownerName",
+                      value: v,
+                    })
+                  }
+                  placeholder="مثال: أحمد محمد"
+                  loading={loading}
+                />
+
+                <Field
+                  label="رقم الموبايل (اختياري)"
+                  value={formData.ownerPhone}
+                  onChangeText={(v) =>
+                    dispatchForm({
+                      type: "UPDATE_FIELD",
+                      field: "ownerPhone",
+                      value: v,
+                    })
+                  }
+                  placeholder="مثال: 01012345678"
+                  loading={loading}
+                  keyboardType={Platform.OS === "ios" ? "phone-pad" : "numeric"}
+                />
+              </>
+            )}
 
             {/* ✅ Specs (optional section) */}
             <View style={styles.sectionHeaderRow}>
