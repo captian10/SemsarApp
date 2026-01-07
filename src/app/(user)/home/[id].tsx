@@ -1,7 +1,14 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import * as Clipboard from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { FlatList as RNFlatList } from "react-native";
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +20,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type ImageStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,8 +29,11 @@ import { FONT } from "@/constants/Typography";
 import RemoteImage from "@components/RemoteImage";
 import { THEME } from "@constants/Colors";
 
-import { usePropertyWithImages, type PropertyRow } from "@api/properties";
+import { usePropertyWithImages } from "@api/properties";
+import { usePropertyImages } from "@api/property-images";
 import { defaultPropertyImage } from "@components/PropertyCard";
+
+const AUTOSLIDE_MS = 2800;
 
 const formatMoney = (n: unknown) => {
   const p = Number(n ?? 0);
@@ -39,7 +50,6 @@ const safeText = (v: unknown, fallback = "—") => {
   return s.length ? s : fallback;
 };
 
-// ✅ لو RemoteImage بيحتاج storage path فقط، نميّز بين URL و path
 const isHttpUrl = (v: unknown) => {
   const s = String(v ?? "").trim();
   return /^https?:\/\//i.test(s);
@@ -58,12 +68,17 @@ function SmartImage({
 }) {
   const src = (pathOrUrl || "").trim();
 
-  // ✅ لو URL كامل → استخدم Image مباشرة
+  if (!src)
+    return (
+      <Image source={{ uri: fallback }} style={style} resizeMode={resizeMode} />
+    );
+
   if (isHttpUrl(src)) {
-    return <Image source={{ uri: src }} style={style} resizeMode={resizeMode} />;
+    return (
+      <Image source={{ uri: src }} style={style} resizeMode={resizeMode} />
+    );
   }
 
-  // ✅ غير كده اعتبره storage path → RemoteImage
   return (
     <RemoteImage
       path={src}
@@ -79,9 +94,10 @@ const hasPositiveNumber = (v: unknown) => {
   return Number.isFinite(n) && n > 0;
 };
 
-// ✅ label + color for status (exactly as you want)
 const statusLabelAr = (s: unknown) => {
-  const v = String(s ?? "").trim().toLowerCase();
+  const v = String(s ?? "")
+    .trim()
+    .toLowerCase();
   if (v === "available") return "متاح";
   if (v === "rented") return "للإيجار";
   if (v === "sold") return "للبيع";
@@ -89,7 +105,9 @@ const statusLabelAr = (s: unknown) => {
 };
 
 const statusColor = (s: unknown) => {
-  const v = String(s ?? "").trim().toLowerCase();
+  const v = String(s ?? "")
+    .trim()
+    .toLowerCase();
   if (v === "available") return THEME.primary;
   if (v === "rented") return "#EF4444";
   if (v === "sold") return "#22C55E";
@@ -100,41 +118,96 @@ export default function PropertyDetailsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: W } = useWindowDimensions();
 
   const id = useMemo(() => {
     const raw = (params as any)?.id;
     return (Array.isArray(raw) ? raw[0] : raw) as string | undefined;
   }, [params]);
 
-  const { data: property, error, isLoading, refetch, isFetching } =
-    usePropertyWithImages(id || "");
+  const {
+    data: property,
+    error,
+    isLoading,
+    refetch,
+    isFetching,
+  } = usePropertyWithImages(id || "");
 
-  const [activeIndex, setActiveIndex] = useState(0);
+  const { data: imagesRows } = usePropertyImages(id || "");
 
   const images = useMemo(() => {
-    const p = property as PropertyRow | undefined;
-    const list = Array.isArray(p?.images) ? p!.images : [];
-    const cover = p?.cover_image ? [{ url: p.cover_image }] : [];
-
-    const finalList = list.length
-      ? list.map((x) => ({ url: x.url }))
-      : cover.length
-      ? cover
-      : [{ url: defaultPropertyImage }];
-
-    return finalList
+    const rows = Array.isArray(imagesRows) ? imagesRows : [];
+    const fromTable = rows
+      .slice()
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
       .map((x) => ({ url: String(x?.url ?? "").trim() }))
       .filter((x) => x.url.length > 0);
-  }, [property]);
+
+    const cover = String((property as any)?.cover_image ?? "").trim();
+    const coverArr = cover ? [{ url: cover }] : [];
+
+    const fallback = [{ url: defaultPropertyImage }];
+
+    return fromTable.length ? fromTable : coverArr.length ? coverArr : fallback;
+  }, [imagesRows, property]);
+
+  const [activeIndex, setActiveIndex] = useState(0);
+  const mainRef = useRef<RNFlatList<{ url: string }> | null>(null);
+
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const interactingRef = useRef(false);
+
+  const stopAuto = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+  }, []);
+
+  const startAuto = useCallback(() => {
+    stopAuto();
+    if (images.length <= 1) return;
+
+    intervalRef.current = setInterval(() => {
+      if (interactingRef.current) return;
+
+      setActiveIndex((prev) => {
+        const next = (prev + 1) % images.length;
+        try {
+          mainRef.current?.scrollToIndex({ index: next, animated: true });
+        } catch {}
+        return next;
+      });
+    }, AUTOSLIDE_MS);
+  }, [images.length, stopAuto]);
+
+  useEffect(() => {
+    startAuto();
+    return () => stopAuto();
+  }, [startAuto, stopAuto]);
+
+  useEffect(() => {
+    if (activeIndex >= images.length) setActiveIndex(0);
+  }, [images.length, activeIndex]);
+
+  const goTo = useCallback(
+    (idx: number) => {
+      const clamped = Math.max(0, Math.min(idx, images.length - 1));
+      stopAuto();
+      interactingRef.current = false;
+      setActiveIndex(clamped);
+      try {
+        mainRef.current?.scrollToIndex({ index: clamped, animated: true });
+      } catch {}
+      startAuto();
+    },
+    [images.length, startAuto, stopAuto]
+  );
 
   const priceText = useMemo(() => {
     const p = Number((property as any)?.price ?? 0);
-
     const c = String((property as any)?.currency ?? "EGP")
       .trim()
       .toUpperCase();
     const currencyLabel = c === "EGP" ? "جنيه" : c;
-
     return `${formatMoney(p)} ${currencyLabel}`;
   }, [property]);
 
@@ -144,13 +217,11 @@ export default function PropertyDetailsScreen() {
     () => safeText((property as any)?.address, ""),
     [property]
   );
-
   const type = useMemo(
     () => safeText((property as any)?.property_type, "—"),
     [property]
   );
 
-  // ✅ status label + color
   const statusValue = useMemo(() => (property as any)?.status, [property]);
   const status = useMemo(() => statusLabelAr(statusValue), [statusValue]);
   const statusClr = useMemo(() => statusColor(statusValue), [statusValue]);
@@ -164,7 +235,6 @@ export default function PropertyDetailsScreen() {
   const bathrooms = (property as any)?.bathrooms;
   const area = (property as any)?.area_sqm;
 
-  // ✅ رقم واحد فقط للتواصل (بدون تكرار)
   const AGENT_PHONE = "01012433451";
 
   const dial = useCallback(async (phoneNumber: string) => {
@@ -188,7 +258,6 @@ export default function PropertyDetailsScreen() {
       const raw = phone.replace(/\D/g, "");
       if (!raw) return;
 
-      // ✅ مصر: +20 (لو الرقم يبدأ بـ 0)
       const international = raw.startsWith("0")
         ? `20${raw.replace(/^0/, "")}`
         : raw;
@@ -248,71 +317,130 @@ export default function PropertyDetailsScreen() {
       </View>
     );
   }
+  const HERO_H = Math.min(560, Math.max(420, W * 0.72));
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen
-        options={{
-          title: "",
-          headerShadowVisible: false,
-          headerStyle: { backgroundColor: THEME.white.DEFAULT },
-          headerTitleStyle: { fontFamily: FONT.bold },
-        }}
-      />
+      <Stack.Screen options={{ title: "", headerShown: false }} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: 170 + insets.bottom },
-        ]}
+        contentContainerStyle={{ paddingBottom: 170 + insets.bottom }}
       >
-        {/* Gallery */}
-        <View style={styles.galleryCard}>
+        {/* ✅ HERO GALLERY */}
+
+        <View style={[styles.heroWrap, { height: HERO_H }]}>
           <FlatList
-            style={{ width: "100%" }}
-            contentContainerStyle={{ width: "100%" }}
+            ref={mainRef as any}
             data={images}
-            keyExtractor={(_, idx) => `img-${idx}`}
             horizontal
             pagingEnabled
+            bounces={false}
             showsHorizontalScrollIndicator={false}
+            keyExtractor={(item, idx) => `${item.url}-${idx}`}
+            snapToInterval={W}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            disableIntervalMomentum
+            onTouchStart={() => {
+              interactingRef.current = true;
+              stopAuto();
+            }}
+            onScrollBeginDrag={() => {
+              interactingRef.current = true;
+              stopAuto();
+            }}
             onMomentumScrollEnd={(e) => {
-              const w = e.nativeEvent.layoutMeasurement.width;
               const x = e.nativeEvent.contentOffset.x;
-              const idx = Math.round(x / Math.max(w, 1));
+              const idx = Math.round(x / Math.max(W, 1));
               setActiveIndex(idx);
+              interactingRef.current = false;
+              startAuto();
             }}
             renderItem={({ item }) => (
-              <View style={styles.imageSlide}>
+              <View style={{ width: W, height: "100%" }}>
                 <SmartImage
                   pathOrUrl={item.url}
                   fallback={defaultPropertyImage}
-                  style={styles.image}
+                  style={styles.heroImage}
                   resizeMode="cover"
                 />
               </View>
             )}
+            getItemLayout={(_, index) => ({
+              length: W,
+              offset: W * index,
+              index,
+            })}
+            onScrollToIndexFailed={(info) => {
+              setTimeout(() => {
+                mainRef.current?.scrollToOffset({
+                  offset: info.averageItemLength * info.index,
+                  animated: true,
+                });
+              }, 80);
+            }}
           />
 
-          {/* price pill */}
-          <View style={styles.pricePill}>
-            <Text style={styles.priceText}>{priceText}</Text>
+          {/* ✅ top overlay buttons */}
+          <View style={[styles.heroTopRow, { paddingTop: insets.top + 10 }]}>
+            <Pressable
+              onPress={() => router.back()}
+              style={({ pressed }) => [
+                styles.heroIconBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <FontAwesome name="chevron-left" size={16} color="#fff" />
+            </Pressable>
+
+            <View style={{ flex: 1 }} />
+
+            {images.length > 1 && (
+              <View style={styles.heroCounterPill}>
+                <Text style={styles.heroCounterText}>
+                  {activeIndex + 1} / {images.length}
+                </Text>
+              </View>
+            )}
           </View>
 
-          {/* dots */}
-          <View style={styles.dots}>
-            {images.map((_, i) => (
-              <View
-                key={`dot-${i}`}
-                style={[styles.dot, i === activeIndex && styles.dotActive]}
+          {/* ✅ floating thumbnails */}
+          {images.length > 1 && (
+            <View style={styles.heroThumbsFloat}>
+              <FlatList
+                data={images}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(it, idx) => `hero-th-${it.url}-${idx}`}
+                contentContainerStyle={styles.heroThumbsContent}
+                renderItem={({ item, index }) => {
+                  const active = index === activeIndex;
+                  return (
+                    <Pressable
+                      onPress={() => goTo(index)}
+                      style={({ pressed }) => [
+                        styles.heroThumbItem,
+                        active && styles.heroThumbItemActive,
+                        pressed && { opacity: 0.92 },
+                      ]}
+                    >
+                      <SmartImage
+                        pathOrUrl={item.url}
+                        fallback={defaultPropertyImage}
+                        style={styles.heroThumbImg}
+                        resizeMode="cover"
+                      />
+                    </Pressable>
+                  );
+                }}
               />
-            ))}
-          </View>
+            </View>
+          )}
         </View>
 
-        {/* Title + Location */}
-        <View style={styles.infoCard}>
+        {/* ✅ BODY */}
+        <View style={styles.body}>
           <Text style={styles.title} numberOfLines={2}>
             {title}
           </Text>
@@ -325,11 +453,8 @@ export default function PropertyDetailsScreen() {
             </Text>
           </View>
 
-          {/* Meta pills */}
           <View style={styles.metaRow}>
             <MetaPill icon="tag" text={type} />
-
-            {/* ✅ colored status */}
             <MetaPill icon="info-circle" text={status} color={statusClr} />
 
             {hasPositiveNumber(area) && (
@@ -342,12 +467,11 @@ export default function PropertyDetailsScreen() {
               <MetaPill icon="bath" text={`${Number(bathrooms)} حمام`} />
             )}
           </View>
-        </View>
 
-        {/* Description */}
-        <View style={styles.descCard}>
-          <Text style={styles.sectionTitle}>الوصف</Text>
-          <Text style={styles.descText}>{description}</Text>
+          <View style={styles.descCard}>
+            <Text style={styles.sectionTitle}>الوصف</Text>
+            <Text style={styles.descText}>{description}</Text>
+          </View>
         </View>
       </ScrollView>
 
@@ -376,7 +500,7 @@ export default function PropertyDetailsScreen() {
                 styles.bottomBtnGhost,
                 pressed && styles.pressed,
               ]}
-              onLongPress={() => copy(AGENT_PHONE, "تم نسخ الرقم")} // ✅ long press copy (optional)
+              onLongPress={() => copy(AGENT_PHONE, "تم نسخ الرقم")}
             >
               <View style={styles.waRow}>
                 <FontAwesome name="whatsapp" size={16} color="#25D366" />
@@ -384,16 +508,11 @@ export default function PropertyDetailsScreen() {
               </View>
             </Pressable>
           </View>
-
-          {/* ✅ small hint to copy */}
-          <Text style={styles.copyHint}>اضغط مطوّلًا على زر واتساب لنسخ الرقم</Text>
         </View>
       </View>
     </View>
   );
 }
-
-/* ---------- small components ---------- */
 
 function MetaPill({
   icon,
@@ -406,11 +525,7 @@ function MetaPill({
 }) {
   return (
     <View style={styles.metaPill}>
-      <FontAwesome
-        name={icon}
-        size={12}
-        color={color ?? THEME.dark[100]}
-      />
+      <FontAwesome name={icon} size={12} color={color ?? THEME.dark[100]} />
       <Text
         style={[styles.metaText, color ? { color } : null]}
         numberOfLines={1}
@@ -421,11 +536,8 @@ function MetaPill({
   );
 }
 
-/* ---------- styles ---------- */
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: THEME.white[100] },
-  content: { padding: 12, gap: 12 },
 
   stateWrap: {
     flex: 1,
@@ -435,6 +547,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 10,
   },
+
   stateText: {
     fontSize: 13,
     color: THEME.gray[100],
@@ -457,69 +570,61 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   retryText: { color: "#fff", fontFamily: FONT.bold, fontSize: 13 },
-
   pressed: { opacity: 0.9 },
 
-  galleryCard: {
-    position: "relative",
-    backgroundColor: "#fff",
-    borderRadius: 22,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.06)",
-  },
-  imageSlide: {
-    width: "100%",
-    aspectRatio: 16 / 10,
-    backgroundColor: THEME.white[100],
-  },
-  image: {
-    width: "100%",
-    height: "100%",
-  } as ImageStyle,
+  /* HERO */
+  heroWrap: { width: "100%", backgroundColor: "#000" },
+  heroImage: { width: "100%", height: "100%" } as ImageStyle,
 
-  pricePill: {
+  heroTopRow: {
     position: "absolute",
-    top: 12,
     left: 12,
+    right: 12,
+    top: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  heroIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroCounterPill: {
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.95)",
+    backgroundColor: "rgba(0,0,0,0.35)",
     borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.10)",
+    borderColor: "rgba(255,255,255,0.18)",
   },
-  priceText: {
-    fontSize: 12,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-  },
+  heroCounterText: { color: "#fff", fontFamily: FONT.bold, fontSize: 12 },
 
-  dots: {
-    position: "absolute",
-    bottom: 10,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 6,
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.55)",
-  },
-  dotActive: { backgroundColor: "#fff" },
-
-  infoCard: {
-    backgroundColor: "#fff",
-    borderRadius: 22,
+  heroThumbsFloat: { position: "absolute", left: 0, right: 0, bottom: -22 },
+  heroThumbsContent: { paddingHorizontal: 12, gap: 10 },
+  heroThumbItem: {
+    width: 64,
+    height: 44,
+    borderRadius: 14,
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.06)",
-    padding: 12,
-    gap: 10,
-    alignItems: "flex-end",
+    borderColor: "rgba(255,255,255,0.26)",
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+  heroThumbItemActive: { borderWidth: 2, borderColor: "#fff" },
+  heroThumbImg: { width: "100%", height: "100%" } as ImageStyle,
+
+  /* BODY */
+  body: {
+    paddingHorizontal: 12,
+    paddingTop: 34,
+    paddingBottom: 12,
+    gap: 12,
   },
   title: {
     fontSize: 18,
@@ -592,7 +697,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Bottom bar
+  /* Bottom bar */
   bottom: { position: "absolute", left: 12, right: 12, bottom: 12 },
   bottomCard: {
     backgroundColor: "rgba(255,255,255,0.95)",
@@ -617,11 +722,7 @@ const styles = StyleSheet.create({
     fontFamily: FONT.medium,
     color: THEME.gray[100],
   },
-  bottomValue: {
-    fontSize: 14,
-    fontFamily: FONT.bold,
-    color: THEME.primary,
-  },
+  bottomValue: { fontSize: 14, fontFamily: FONT.bold, color: THEME.primary },
 
   bottomBtns: { flexDirection: "row-reverse", gap: 10 },
   bottomBtn: {
@@ -648,14 +749,12 @@ const styles = StyleSheet.create({
     fontFamily: FONT.bold,
     fontSize: 13,
   },
-
   waRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
-
   copyHint: {
     textAlign: "right",
     color: THEME.gray[100],

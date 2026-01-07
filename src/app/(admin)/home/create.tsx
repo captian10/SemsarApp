@@ -1,4 +1,5 @@
 // (admin)/home/create.tsx
+// ✅ Create / Edit Property (cover + multiple extra images + owner contact)
 
 import {
   PROPERTY_STATUS,
@@ -114,8 +115,10 @@ function isRlsError(err: any) {
 
 const digitsOnly = (s: string) => String(s ?? "").replace(/\D/g, "");
 
+/** ========= Form Types ========= */
+
 type FormData = {
-  coverImage: string | null;
+  coverImage: string | null; // cover (file:// OR storage path)
   title: string;
   description: string;
   price: string;
@@ -169,6 +172,8 @@ function formReducer(state: FormData, action: FormAction): FormData {
       return state;
   }
 }
+
+/** ========= Small Components ========= */
 
 const Field = memo(function Field({
   label,
@@ -352,6 +357,8 @@ const StatusSelector = memo(function StatusSelector({
   );
 });
 
+/** ========= Screen ========= */
+
 export default function CreatePropertyScreen() {
   const router = useRouter();
 
@@ -381,6 +388,11 @@ export default function CreatePropertyScreen() {
   const [showSpecs, setShowSpecs] = useState(false);
   const [showOwner, setShowOwner] = useState(false);
 
+  // ✅ extra images section
+  const [extraImages, setExtraImages] = useState<string[]>([]);
+  const [didLoadImages, setDidLoadImages] = useState(false);
+  const [showExtraImages, setShowExtraImages] = useState(false);
+
   // refs to manage edit init
   const contactHadRowRef = useRef(false);
   const didInitContactRef = useRef(false);
@@ -389,7 +401,7 @@ export default function CreatePropertyScreen() {
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // preview image
+  // preview cover image
   const imageSourceForPreview: ImageSourcePropType = useMemo(() => {
     const c = formData.coverImage;
     if (!c) return DEFAULT_IMAGE_SOURCE;
@@ -505,10 +517,45 @@ export default function CreatePropertyScreen() {
     }
   }, [isUpdating, contact]);
 
+  // ✅ load existing property_images (edit)
+  useEffect(() => {
+    if (!isUpdating) return;
+    if (!id) return;
+    if (didLoadImages) return;
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("property_images")
+          .select("id,url,sort_order")
+          .eq("property_id", id)
+          .order("sort_order", { ascending: true });
+
+        if (error) throw new Error(error.message);
+
+        const urls = (data ?? [])
+          .map((r: any) => String(r.url ?? "").trim())
+          .filter((x: string) => x.length > 0);
+
+        setExtraImages(urls);
+        if (urls.length) setShowExtraImages(true);
+      } catch {
+        // ignore
+      } finally {
+        setDidLoadImages(true);
+      }
+    })();
+  }, [isUpdating, id, didLoadImages]);
+
   const resetFields = () => {
     dispatchForm({ type: "RESET" });
     setShowSpecs(false);
     setShowOwner(false);
+    setShowExtraImages(false);
+
+    setExtraImages([]);
+    setDidLoadImages(false);
+
     didInitContactRef.current = false;
     contactHadRowRef.current = false;
   };
@@ -559,7 +606,9 @@ export default function CreatePropertyScreen() {
     return newErrors.length === 0;
   };
 
-  const pickImage = async () => {
+  /** ========= Picking images ========= */
+
+  const pickCoverImage = async () => {
     if (loading) return;
 
     const { status: perm } =
@@ -580,6 +629,7 @@ export default function CreatePropertyScreen() {
     const selected = result.assets?.[0];
     if (!selected?.uri) return;
 
+    // ✅ size check
     try {
       const info = await FileSystem.getInfoAsync(selected.uri, {
         size: true,
@@ -597,6 +647,67 @@ export default function CreatePropertyScreen() {
       value: selected.uri,
     });
   };
+
+  const pickExtraImages = async () => {
+    if (loading) return;
+
+    const { status: perm } =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm !== "granted") {
+      Alert.alert("مطلوب إذن", "من فضلك اسمح بالوصول للصور.");
+      return;
+    }
+
+    // ✅ allowsMultipleSelection قد لا يعمل على كل الأجهزة/النسخ
+    const result: any = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: getImagesMediaTypes(),
+      quality: 1,
+      allowsEditing: false,
+      allowsMultipleSelection: true,
+      selectionLimit: 20,
+    });
+
+    if (result.canceled) return;
+
+    const assets = (result.assets ?? []) as Array<{ uri?: string }>;
+    const uris = assets
+      .map((a) => String(a?.uri ?? "").trim())
+      .filter((u) => u.startsWith("file://"));
+
+    if (!uris.length) return;
+
+    // ✅ size check for each
+    const okUris: string[] = [];
+    for (const uri of uris) {
+      try {
+        const info = await FileSystem.getInfoAsync(uri, { size: true } as any);
+        const size = (info as any)?.size as number | undefined;
+        if (typeof size === "number" && size > MAX_IMAGE_BYTES) continue;
+        okUris.push(uri);
+      } catch {
+        okUris.push(uri);
+      }
+    }
+
+    if (!okUris.length) {
+      Alert.alert("خطأ", "كل الصور كانت كبيرة جدًا (أكبر من 7MB).");
+      return;
+    }
+
+    setExtraImages((prev) => {
+      const set = new Set(prev);
+      okUris.forEach((u) => set.add(u));
+      return Array.from(set);
+    });
+
+    setShowExtraImages(true);
+  };
+
+  const removeExtraImage = (uriOrPath: string) => {
+    setExtraImages((prev) => prev.filter((x) => x !== uriOrPath));
+  };
+
+  /** ========= Upload ========= */
 
   // ✅ upload to ROOT: <uuid>.<ext>
   const uploadImage = async (localUri: string) => {
@@ -623,6 +734,27 @@ export default function CreatePropertyScreen() {
 
     return data?.path ?? null;
   };
+
+  const uploadManyImages = async (urisOrPaths: string[]) => {
+    const paths: string[] = [];
+
+    for (const v of urisOrPaths) {
+      const s = String(v ?? "").trim();
+      if (!s) continue;
+
+      if (isLocalUri(s)) {
+        const p = await uploadImage(s);
+        if (p) paths.push(p);
+      } else {
+        // already storage path OR full url
+        paths.push(s);
+      }
+    }
+
+    return paths;
+  };
+
+  /** ========= Payload ========= */
 
   const buildPayload = async (finalCover: string | null) => {
     const { data: sess } = await supabase.auth.getSession();
@@ -656,10 +788,13 @@ export default function CreatePropertyScreen() {
       cover_image: finalCover,
     };
 
+    // ✅ satisfy your insert policy too
     if (!isUpdating) payload.created_by = uid;
 
     return payload;
   };
+
+  /** ========= DB sync for contact + images ========= */
 
   // ✅ sync owner contact after saving property
   const syncOwnerContact = async (propertyId: string) => {
@@ -685,6 +820,31 @@ export default function CreatePropertyScreen() {
     }
   };
 
+  // ✅ save property_images as the exact order in extraImages
+  const syncPropertyImages = async (propertyId: string) => {
+    const finalPaths = await uploadManyImages(extraImages);
+
+    // delete old
+    const { error: delErr } = await supabase
+      .from("property_images")
+      .delete()
+      .eq("property_id", propertyId);
+    if (delErr) throw new Error(delErr.message);
+
+    if (!finalPaths.length) return;
+
+    const rows = finalPaths.map((path, idx) => ({
+      property_id: propertyId,
+      url: path,
+      sort_order: idx,
+    }));
+
+    const { error: insErr } = await supabase.from("property_images").insert(rows);
+    if (insErr) throw new Error(insErr.message);
+  };
+
+  /** ========= Submit handlers ========= */
+
   const onCreate = async () => {
     setErrors([]);
     if (!validateInput()) return;
@@ -702,13 +862,16 @@ export default function CreatePropertyScreen() {
       insertProperty(payload as any, {
         onSuccess: async (row: any) => {
           try {
-            await syncOwnerContact(String(row?.id));
+            const pid = String(row?.id);
+            await syncOwnerContact(pid);
+            await syncPropertyImages(pid);
+
             resetFields();
             setLoading(false);
             router.back();
           } catch (e: any) {
             setLoading(false);
-            setErrors([e?.message || "فشل حفظ بيانات صاحب العقار"]);
+            setErrors([e?.message || "فشل حفظ الصور/بيانات صاحب العقار"]);
           }
         },
         onError: (err: any) => {
@@ -743,12 +906,15 @@ export default function CreatePropertyScreen() {
         {
           onSuccess: async (row: any) => {
             try {
-              await syncOwnerContact(String(row?.id ?? id));
+              const pid = String(row?.id ?? id);
+              await syncOwnerContact(pid);
+              await syncPropertyImages(pid);
+
               setLoading(false);
               router.back();
             } catch (e: any) {
               setLoading(false);
-              setErrors([e?.message || "فشل حفظ بيانات صاحب العقار"]);
+              setErrors([e?.message || "فشل حفظ الصور/بيانات صاحب العقار"]);
             }
           },
           onError: (err: any) => {
@@ -791,6 +957,8 @@ export default function CreatePropertyScreen() {
     ]);
   };
 
+  /** ========= Render ========= */
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <KeyboardAvoidingView
@@ -822,14 +990,14 @@ export default function CreatePropertyScreen() {
               {isUpdating ? "تعديل بيانات العقار" : "إضافة عقار جديد"}
             </Text>
             <Text style={styles.subtitle}>
-              أضف صورة الغلاف، العنوان، السعر، والمواصفات الأساسية.
+              أضف صورة الغلاف، صور إضافية، العنوان، السعر، والمواصفات الأساسية.
             </Text>
           </View>
 
           <View style={styles.card}>
-            {/* Cover Image */}
+            {/* ✅ Cover Image */}
             <Pressable
-              onPress={loading ? undefined : pickImage}
+              onPress={loading ? undefined : pickCoverImage}
               style={({ pressed }) => [
                 styles.imageWrap,
                 pressed && !loading ? styles.pressed : null,
@@ -848,6 +1016,74 @@ export default function CreatePropertyScreen() {
                 </Text>
               </View>
             </Pressable>
+
+            {/* ✅ Extra Images */}
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHint}>صور إضافية (اختياري)</Text>
+
+              <Pressable
+                onPress={() => setShowExtraImages((p) => !p)}
+                style={({ pressed }) => [
+                  styles.specToggle,
+                  pressed && styles.pressed,
+                  loading && styles.disabled,
+                ]}
+                disabled={loading}
+              >
+                <Text style={styles.specToggleText}>
+                  {showExtraImages ? "إخفاء" : "إضافة"}
+                </Text>
+              </Pressable>
+            </View>
+
+            {showExtraImages && (
+              <View style={{ gap: 10, marginBottom: 6 }}>
+                <Pressable
+                  onPress={loading ? undefined : pickExtraImages}
+                  style={({ pressed }) => [
+                    styles.addImagesBtn,
+                    pressed && styles.pressed,
+                    loading && styles.disabled,
+                  ]}
+                  disabled={loading}
+                  accessibilityLabel="إضافة صور إضافية"
+                >
+                  <Text style={styles.addImagesBtnText}>إضافة صور</Text>
+                </Pressable>
+
+                {extraImages.length > 0 && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.thumbsRow}
+                  >
+                    {extraImages.map((uri) => (
+                      <View key={uri} style={styles.thumbWrap}>
+                        <Image
+                          source={{ uri }}
+                          style={styles.thumb}
+                          resizeMode="cover"
+                        />
+                        <Pressable
+                          onPress={() => removeExtraImage(uri)}
+                          style={styles.thumbRemove}
+                          hitSlop={10}
+                          accessibilityLabel="حذف الصورة"
+                        >
+                          <Text style={styles.thumbRemoveText}>×</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
+
+                {extraImages.length === 0 && (
+                  <Text style={styles.miniHint}>
+                    يمكنك إضافة 1 أو أكثر صور. لو ما أضفتش صور مش مشكلة.
+                  </Text>
+                )}
+              </View>
+            )}
 
             <Field
               label="عنوان العقار"
@@ -1102,6 +1338,8 @@ export default function CreatePropertyScreen() {
   );
 }
 
+/** ========= Styles ========= */
+
 type Styles = {
   screen: ViewStyle;
   container: ViewStyle;
@@ -1145,6 +1383,15 @@ type Styles = {
   specToggleText: TextStyle;
 
   grid3: ViewStyle;
+
+  addImagesBtn: ViewStyle;
+  addImagesBtnText: TextStyle;
+  thumbsRow: ViewStyle;
+  thumbWrap: ViewStyle;
+  thumb: ImageStyle;
+  thumbRemove: ViewStyle;
+  thumbRemoveText: TextStyle;
+  miniHint: TextStyle;
 
   error: TextStyle;
   delete: ViewStyle;
@@ -1312,6 +1559,57 @@ const styles = StyleSheet.create<Styles>({
   },
 
   grid3: { flexDirection: "row-reverse", gap: 10 },
+
+  // ✅ extra images UI
+  addImagesBtn: {
+    alignSelf: "flex-end",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(59,130,246,0.25)",
+    backgroundColor: "rgba(59,130,246,0.10)",
+  },
+  addImagesBtnText: {
+    fontFamily: FONT.bold,
+    fontSize: 12,
+    color: THEME.primary,
+  },
+  thumbsRow: {
+    flexDirection: "row-reverse",
+    gap: 10,
+    paddingVertical: 4,
+  },
+  thumbWrap: {
+    width: 86,
+    height: 86,
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.10)",
+    backgroundColor: THEME.white[100],
+    position: "relative",
+  },
+  thumb: { width: "100%", height: "100%" },
+  thumbRemove: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    backgroundColor: "rgba(239,68,68,0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbRemoveText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
+  miniHint: {
+    fontSize: 12,
+    color: THEME.gray[100],
+    fontFamily: FONT.regular,
+    textAlign: "right",
+    writingDirection: "rtl",
+  },
 
   error: {
     color: THEME.error,
