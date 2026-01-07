@@ -1,21 +1,4 @@
-// (admin)/home/create.tsx  (مثال)
-// ✅ Real Estate Create / Edit Property Screen (Improved Version)
-//
-// Improvements:
-// - Combined all form-related states into a single `formData` object for better state management and easier updates.
-// - Used `useReducer` for form state to handle updates more efficiently (avoids multiple setState calls).
-// - Removed unused or redundant code (e.g., setCurrency is kept but could be removed if currency is always fixed; fixed pill to show dynamic currency).
-// - Fixed potential UI bug: Currency pill now displays the current currency from state (dynamic).
-// - Added a statusLabels map for better maintainability of status display texts.
-// - Removed empty View in grid2 and made city full-width for cleaner layout.
-// - Improved validation: Added more checks (e.g., max lengths, positive numbers for specs).
-// - Enhanced error handling: Consolidated errors into an array for multiple error display if needed.
-// - Optimized useEffect: Only runs when updatingProperty changes, and uses a deep copy.
-// - Added accessibility labels to inputs and buttons.
-// - Minor style tweaks for consistency (e.g., ensured RTL support).
-// - Added image compression check implicitly via size limit; no new libs.
-// - Kept existing libs; no new dependencies added.
-// - Improved performance: Memoized more components (e.g., selectors).
+// (admin)/home/create.tsx
 
 import {
   PROPERTY_STATUS,
@@ -58,8 +41,8 @@ import { FONT } from "@/constants/Typography";
 import Button from "../../../components/Button";
 import { defaultPropertyImage as defaultPropertyImageUrl } from "../../../components/PropertyCard";
 
-// ✅ Change bucket name if needed
 const BUCKET = "property-images";
+const MAX_IMAGE_BYTES = 7_000_000;
 
 // fallback image
 const DEFAULT_IMAGE_SOURCE: ImageSourcePropType = {
@@ -69,20 +52,52 @@ const DEFAULT_IMAGE_SOURCE: ImageSourcePropType = {
 const round2 = (n: number) =>
   Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
+const normalizeNum = (v: string) =>
+  String(v ?? "")
+    .trim()
+    .replace(/[٬،]/g, ",")
+    .replace(",", ".");
+
 const toFloatOrNull = (v: string) => {
-  const n = Number(String(v ?? "").trim().replace(",", "."));
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const n = Number(normalizeNum(s));
   return Number.isFinite(n) ? n : null;
 };
 
 const toIntOrNull = (v: string) => {
-  const n = Number(String(v ?? "").trim());
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const n = Number(s);
   if (!Number.isFinite(n)) return null;
   return Math.trunc(n);
 };
 
-function handleError(error: any): never {
-  if (error?.message) throw new Error(error.message);
-  throw new Error("Something went wrong");
+const isLocalUri = (s?: string | null) => !!s && s.startsWith("file://");
+const isHttpUrl = (s?: string | null) =>
+  !!s && (s.startsWith("http://") || s.startsWith("https://"));
+
+function getExt(uri: string) {
+  return uri.split(".").pop()?.toLowerCase() ?? "jpg";
+}
+
+function getContentType(fileExt: string) {
+  if (fileExt === "jpg" || fileExt === "jpeg") return "image/jpeg";
+  if (fileExt === "webp") return "image/webp";
+  return "image/png";
+}
+
+// ✅ Fix expo-image-picker warning (no MediaTypeOptions)
+function getImagesMediaTypes(): any {
+  const MT = (ImagePicker as any).MediaType;
+  if (MT?.Images) return [MT.Images];
+  // fallback for older versions
+  return ["images"];
+}
+
+function isRlsError(err: any) {
+  const msg = String(err?.message ?? "").toLowerCase();
+  return msg.includes("row-level security") || msg.includes("rls");
 }
 
 type FormData = {
@@ -93,27 +108,32 @@ type FormData = {
   currency: string;
   city: string;
   address: string;
+
+  // specs (optional)
   bedrooms: string;
   bathrooms: string;
   area: string;
+
   propertyType: PropertyType;
   status: PropertyStatus;
 };
 
-type FormAction = { type: "UPDATE_FIELD"; field: keyof FormData; value: any } | { type: "RESET" };
+type FormAction =
+  | { type: "UPDATE_FIELD"; field: keyof FormData; value: any }
+  | { type: "RESET" };
 
 const initialFormData: FormData = {
   coverImage: null,
   title: "",
   description: "",
   price: "",
-  currency: "EGP",
+  currency: "جنيه", // ✅ بدل EGP
   city: "",
   address: "",
   bedrooms: "",
   bathrooms: "",
   area: "",
-  propertyType: "شقة",
+  propertyType: (PROPERTY_TYPES?.[0] ?? "شقة") as PropertyType,
   status: "available",
 };
 
@@ -206,7 +226,9 @@ const PriceInput = memo(function PriceInput({
         />
 
         <View style={styles.currencyPill}>
-          <Text style={styles.currencyText}>{currency.toUpperCase()}</Text>
+          <Text style={styles.currencyText}>
+            {String(currency || "جنيه")} {/* ✅ بدون Uppercase */}
+          </Text>
         </View>
       </View>
     </View>
@@ -247,10 +269,7 @@ const PropertyTypeSelector = memo(function PropertyTypeSelector({
               accessibilityLabel={`نوع العقار: ${t}`}
             >
               <Text
-                style={[
-                  styles.chipText,
-                  active ? styles.chipTextActive : null,
-                ]}
+                style={[styles.chipText, active ? styles.chipTextActive : null]}
               >
                 {t}
               </Text>
@@ -271,11 +290,11 @@ const StatusSelector = memo(function StatusSelector({
   setStatus: (s: PropertyStatus) => void;
   loading: boolean;
 }) {
-  const statusLabels = {
+  const statusLabels: Record<string, string> = {
     available: "متاح",
     sold: "للبيع",
     rented: "للإيجار",
-  } as const;
+  };
 
   return (
     <View style={styles.field}>
@@ -320,7 +339,7 @@ export default function CreatePropertyScreen() {
   const { id: idParam } = useLocalSearchParams();
   const id = useMemo(() => {
     const raw = Array.isArray(idParam) ? idParam[0] : idParam;
-    return typeof raw === "string" && raw.trim().length > 0 ? raw : "";
+    return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : "";
   }, [idParam]);
 
   const isUpdating = Boolean(id);
@@ -334,21 +353,22 @@ export default function CreatePropertyScreen() {
   // form state
   const [formData, dispatchForm] = useReducer(formReducer, initialFormData);
 
+  // ✅ specs section toggle
+  const [showSpecs, setShowSpecs] = useState(false);
+
   // errors and loading
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   // preview image
   const imageSourceForPreview: ImageSourcePropType = useMemo(() => {
-    if (!formData.coverImage) return DEFAULT_IMAGE_SOURCE;
+    const c = formData.coverImage;
+    if (!c) return DEFAULT_IMAGE_SOURCE;
 
-    if (formData.coverImage.startsWith("file://")) return { uri: formData.coverImage };
-    if (formData.coverImage.startsWith("http://") || formData.coverImage.startsWith("https://")) {
-      return { uri: formData.coverImage };
-    }
+    if (isLocalUri(c) || isHttpUrl(c)) return { uri: c };
 
     // assume it's a storage path
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(formData.coverImage);
+    const { data } = supabase.storage.from(BUCKET).getPublicUrl(c);
     return data?.publicUrl ? { uri: data.publicUrl } : DEFAULT_IMAGE_SOURCE;
   }, [formData.coverImage]);
 
@@ -356,38 +376,89 @@ export default function CreatePropertyScreen() {
   useEffect(() => {
     if (!updatingProperty) return;
 
-    dispatchForm({ type: "UPDATE_FIELD", field: "title", value: updatingProperty.title ?? "" });
-    dispatchForm({ type: "UPDATE_FIELD", field: "description", value: updatingProperty.description ?? "" });
-    dispatchForm({ type: "UPDATE_FIELD", field: "price", value: updatingProperty.price != null ? String(updatingProperty.price) : "" });
-    dispatchForm({ type: "UPDATE_FIELD", field: "currency", value: updatingProperty.currency ?? "EGP" });
-    dispatchForm({ type: "UPDATE_FIELD", field: "city", value: updatingProperty.city ?? "" });
-    dispatchForm({ type: "UPDATE_FIELD", field: "address", value: updatingProperty.address ?? "" });
-    dispatchForm({ type: "UPDATE_FIELD", field: "bedrooms", value: updatingProperty.bedrooms != null ? String(updatingProperty.bedrooms) : "" });
-    dispatchForm({ type: "UPDATE_FIELD", field: "bathrooms", value: updatingProperty.bathrooms != null ? String(updatingProperty.bathrooms) : "" });
-    dispatchForm({ type: "UPDATE_FIELD", field: "area", value: updatingProperty.area_sqm != null ? String(updatingProperty.area_sqm) : "" });
+    dispatchForm({
+      type: "UPDATE_FIELD",
+      field: "title",
+      value: updatingProperty.title ?? "",
+    });
+    dispatchForm({
+      type: "UPDATE_FIELD",
+      field: "description",
+      value: updatingProperty.description ?? "",
+    });
+    dispatchForm({
+      type: "UPDATE_FIELD",
+      field: "price",
+      value:
+        updatingProperty.price != null ? String(updatingProperty.price) : "",
+    });
+    dispatchForm({
+      type: "UPDATE_FIELD",
+      field: "currency",
+      value: updatingProperty.currency ?? "جنيه", // ✅
+    });
+    dispatchForm({
+      type: "UPDATE_FIELD",
+      field: "city",
+      value: updatingProperty.city ?? "",
+    });
+    dispatchForm({
+      type: "UPDATE_FIELD",
+      field: "address",
+      value: updatingProperty.address ?? "",
+    });
+
+    const bedrooms =
+      updatingProperty.bedrooms != null ? String(updatingProperty.bedrooms) : "";
+    const bathrooms =
+      updatingProperty.bathrooms != null
+        ? String(updatingProperty.bathrooms)
+        : "";
+    const area =
+      updatingProperty.area_sqm != null ? String(updatingProperty.area_sqm) : "";
+
+    dispatchForm({ type: "UPDATE_FIELD", field: "bedrooms", value: bedrooms });
+    dispatchForm({ type: "UPDATE_FIELD", field: "bathrooms", value: bathrooms });
+    dispatchForm({ type: "UPDATE_FIELD", field: "area", value: area });
+
+    // ✅ لو فيه مواصفات قديمة افتح القسم تلقائي
+    if ((bedrooms && bedrooms.trim()) || (bathrooms && bathrooms.trim()) || (area && area.trim())) {
+      setShowSpecs(true);
+    }
+
     dispatchForm({
       type: "UPDATE_FIELD",
       field: "propertyType",
-      value: (PROPERTY_TYPES.includes(updatingProperty.property_type as any) ? updatingProperty.property_type : "شقة") as PropertyType,
+      value: (PROPERTY_TYPES.includes(updatingProperty.property_type as any)
+        ? updatingProperty.property_type
+        : (PROPERTY_TYPES?.[0] ?? "شقة")) as PropertyType,
     });
     dispatchForm({
       type: "UPDATE_FIELD",
       field: "status",
-      value: (PROPERTY_STATUS.includes(updatingProperty.status as any) ? updatingProperty.status : "available") as PropertyStatus,
+      value: (PROPERTY_STATUS.includes(updatingProperty.status as any)
+        ? updatingProperty.status
+        : "available") as PropertyStatus,
     });
-    dispatchForm({ type: "UPDATE_FIELD", field: "coverImage", value: updatingProperty.cover_image ?? null });
+    dispatchForm({
+      type: "UPDATE_FIELD",
+      field: "coverImage",
+      value: updatingProperty.cover_image ?? null,
+    });
   }, [updatingProperty]);
 
   const resetFields = () => {
     dispatchForm({ type: "RESET" });
+    setShowSpecs(false);
   };
 
   const validateInput = () => {
-    setErrors([]);
     const newErrors: string[] = [];
 
-    if (!formData.title.trim()) newErrors.push("عنوان العقار مطلوب");
-    if (formData.title.length > 100) newErrors.push("العنوان طويل جدًا (حد أقصى 100 حرف)");
+    const title = formData.title.trim();
+    if (!title) newErrors.push("عنوان العقار مطلوب");
+    if (title.length > 100)
+      newErrors.push("العنوان طويل جدًا (حد أقصى 100 حرف)");
 
     const p = toFloatOrNull(formData.price);
     if (!formData.price.trim()) newErrors.push("السعر مطلوب");
@@ -395,7 +466,7 @@ export default function CreatePropertyScreen() {
     else if (p <= 0) newErrors.push("السعر يجب أن يكون أكبر من 0");
     else if (p > 1e10) newErrors.push("السعر كبير جدًا");
 
-    // optional numeric fields (if provided)
+    // ✅ المواصفات اختيارية: نتحقق فقط لو المستخدم كتب قيمة
     if (formData.bedrooms.trim()) {
       const b = toIntOrNull(formData.bedrooms);
       if (b == null) newErrors.push("عدد الغرف غير صحيح");
@@ -432,69 +503,83 @@ export default function CreatePropertyScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      aspect: [16, 9],
-      quality: 0.8, // slight compression for efficiency
+      mediaTypes: getImagesMediaTypes(),
+      aspect: [1, 1],
+      quality: 1,
+      allowsEditing: true,
     });
 
     if (result.canceled) return;
-
     const selected = result.assets?.[0];
     if (!selected?.uri) return;
 
-    // file size check
-    if (
-      typeof selected.fileSize === "number" &&
-      selected.fileSize > 7_000_000
-    ) {
-      Alert.alert("خطأ", "الصورة كبيرة جدًا. اختر صورة أقل من 7MB.");
-      return;
-    }
+    // ✅ reliable size check
+    try {
+      const info = await FileSystem.getInfoAsync(selected.uri, { size: true } as any);
+      const size = (info as any)?.size as number | undefined;
+      if (typeof size === "number" && size > MAX_IMAGE_BYTES) {
+        Alert.alert("خطأ", "الصورة كبيرة جدًا. اختر صورة أقل من 7MB.");
+        return;
+      }
+    } catch {}
 
-    dispatchForm({ type: "UPDATE_FIELD", field: "coverImage", value: selected.uri });
+    dispatchForm({
+      type: "UPDATE_FIELD",
+      field: "coverImage",
+      value: selected.uri,
+    });
   };
 
+  // ✅ upload to ROOT: <uuid>.<ext>
   const uploadImage = async (localUri: string) => {
     const base64 = await FileSystem.readAsStringAsync(localUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
 
-    const fileExt = localUri.split(".").pop()?.toLowerCase() ?? "jpg";
-    const filePath = `${randomUUID()}.${fileExt}`;
-
-    const contentType =
-      fileExt === "jpg" || fileExt === "jpeg"
-        ? "image/jpeg"
-        : fileExt === "webp"
-        ? "image/webp"
-        : "image/png";
+    const ext = getExt(localUri);
+    const filePath = `${randomUUID()}.${ext}`;
+    const contentType = getContentType(ext);
 
     const { data, error } = await supabase.storage
       .from(BUCKET)
       .upload(filePath, decode(base64), { contentType, upsert: false });
 
-    if (error) handleError(error);
+    if (error) {
+      if (isRlsError(error)) {
+        throw new Error(
+          "RLS منع رفع الصورة في Storage. سياسات storage.objects عندك قد تمنع الرفع في root."
+        );
+      }
+      throw new Error(error.message);
+    }
+
     return data?.path ?? null;
   };
 
   const buildPayload = async (finalCover: string | null) => {
-    // ✅ important for your RLS: created_by must equal auth.uid() on insert (based on your policy)
-    const { data: u } = await supabase.auth.getUser();
-    const uid = u?.user?.id ?? null;
+    const { data: sess } = await supabase.auth.getSession();
+    const uid = sess.session?.user?.id ?? null;
+    if (!uid) {
+      throw new Error("أنت غير مسجل دخول (auth.uid() = null). اعمل Login من جديد.");
+    }
 
     const payload: any = {
       title: formData.title.trim(),
       description: formData.description.trim() || null,
 
       price: round2(toFloatOrNull(formData.price) ?? 0),
-      currency: formData.currency.trim() || "EGP",
+      currency: formData.currency.trim() || "جنيه", // ✅
 
       city: formData.city.trim() || null,
       address: formData.address.trim() || null,
 
-      bedrooms: formData.bedrooms.trim() ? toIntOrNull(formData.bedrooms) : null,
-      bathrooms: formData.bathrooms.trim() ? toIntOrNull(formData.bathrooms) : null,
-      area_sqm: formData.area.trim() ? round2(toFloatOrNull(formData.area) ?? 0) : null,
+      // ✅ optional -> null when empty
+      bedrooms: toIntOrNull(formData.bedrooms),
+      bathrooms: toIntOrNull(formData.bathrooms),
+      area_sqm: (() => {
+        const a = toFloatOrNull(formData.area);
+        return a == null ? null : round2(a);
+      })(),
 
       property_type: formData.propertyType ?? null,
       status: formData.status ?? "available",
@@ -502,21 +587,23 @@ export default function CreatePropertyScreen() {
       cover_image: finalCover,
     };
 
-    // ✅ only add created_by on insert (policy expects it)
-    if (!isUpdating && uid) payload.created_by = uid;
+    // ✅ satisfy your insert policy too
+    if (!isUpdating) payload.created_by = uid;
 
     return payload;
   };
 
   const onCreate = async () => {
+    setErrors([]);
     if (!validateInput()) return;
 
     try {
       setLoading(true);
 
       let coverPath: string | null = null;
-      if (formData.coverImage?.startsWith("file://"))
+      if (isLocalUri(formData.coverImage) && formData.coverImage) {
         coverPath = await uploadImage(formData.coverImage);
+      }
 
       const payload = await buildPayload(coverPath);
 
@@ -538,16 +625,21 @@ export default function CreatePropertyScreen() {
   };
 
   const onUpdate = async () => {
+    setErrors([]);
     if (!validateInput()) return;
 
     try {
       setLoading(true);
 
       let finalCover: string | null = formData.coverImage;
-      if (formData.coverImage?.startsWith("file://"))
+
+      if (isLocalUri(formData.coverImage) && formData.coverImage) {
         finalCover = await uploadImage(formData.coverImage);
+      }
 
       const payload = await buildPayload(finalCover);
+
+      delete payload.created_by;
 
       updateProperty(
         { id, ...payload },
@@ -654,11 +746,12 @@ export default function CreatePropertyScreen() {
               </View>
             </Pressable>
 
-            {/* Basic info */}
             <Field
               label="عنوان العقار"
               value={formData.title}
-              onChangeText={(v) => dispatchForm({ type: "UPDATE_FIELD", field: "title", value: v })}
+              onChangeText={(v) =>
+                dispatchForm({ type: "UPDATE_FIELD", field: "title", value: v })
+              }
               placeholder="مثال: شقة للبيع في مدينة نصر"
               loading={loading}
             />
@@ -666,40 +759,58 @@ export default function CreatePropertyScreen() {
             <Field
               label="وصف (اختياري)"
               value={formData.description}
-              onChangeText={(v) => dispatchForm({ type: "UPDATE_FIELD", field: "description", value: v })}
+              onChangeText={(v) =>
+                dispatchForm({
+                  type: "UPDATE_FIELD",
+                  field: "description",
+                  value: v,
+                })
+              }
               placeholder="اكتب وصف مختصر (المميزات – الدور – التشطيب...)"
               loading={loading}
               multiline
               numberOfLines={4}
             />
 
-            {/* Type chips */}
             <PropertyTypeSelector
               propertyType={formData.propertyType}
-              setPropertyType={(v) => dispatchForm({ type: "UPDATE_FIELD", field: "propertyType", value: v })}
+              setPropertyType={(v) =>
+                dispatchForm({
+                  type: "UPDATE_FIELD",
+                  field: "propertyType",
+                  value: v,
+                })
+              }
               loading={loading}
             />
 
-            {/* Status chips */}
             <StatusSelector
               status={formData.status}
-              setStatus={(v) => dispatchForm({ type: "UPDATE_FIELD", field: "status", value: v })}
+              setStatus={(v) =>
+                dispatchForm({
+                  type: "UPDATE_FIELD",
+                  field: "status",
+                  value: v,
+                })
+              }
               loading={loading}
             />
 
-            {/* Price */}
             <PriceInput
               value={formData.price}
-              onChangeText={(v) => dispatchForm({ type: "UPDATE_FIELD", field: "price", value: v })}
+              onChangeText={(v) =>
+                dispatchForm({ type: "UPDATE_FIELD", field: "price", value: v })
+              }
               currency={formData.currency}
               loading={loading}
             />
 
-            {/* Location */}
             <Field
               label="المدينة (اختياري)"
               value={formData.city}
-              onChangeText={(v) => dispatchForm({ type: "UPDATE_FIELD", field: "city", value: v })}
+              onChangeText={(v) =>
+                dispatchForm({ type: "UPDATE_FIELD", field: "city", value: v })
+              }
               placeholder="مثال: القاهرة"
               loading={loading}
             />
@@ -707,46 +818,90 @@ export default function CreatePropertyScreen() {
             <Field
               label="العنوان (اختياري)"
               value={formData.address}
-              onChangeText={(v) => dispatchForm({ type: "UPDATE_FIELD", field: "address", value: v })}
+              onChangeText={(v) =>
+                dispatchForm({
+                  type: "UPDATE_FIELD",
+                  field: "address",
+                  value: v,
+                })
+              }
               placeholder="مثال: شارع أحمد عرابي – المهندسين"
               loading={loading}
             />
 
-            {/* Specs */}
-            <Text style={styles.sectionHint}>المواصفات</Text>
+            {/* ✅ Specs (optional section) */}
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHint}>المواصفات (اختياري)</Text>
 
-            <View style={styles.grid3}>
-              <View style={{ flex: 1 }}>
-                <Field
-                  label="غرف"
-                  value={formData.bedrooms}
-                  onChangeText={(v) => dispatchForm({ type: "UPDATE_FIELD", field: "bedrooms", value: v })}
-                  placeholder="مثال: 3"
-                  loading={loading}
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Field
-                  label="حمامات"
-                  value={formData.bathrooms}
-                  onChangeText={(v) => dispatchForm({ type: "UPDATE_FIELD", field: "bathrooms", value: v })}
-                  placeholder="مثال: 2"
-                  loading={loading}
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Field
-                  label="مساحة (م²)"
-                  value={formData.area}
-                  onChangeText={(v) => dispatchForm({ type: "UPDATE_FIELD", field: "area", value: v })}
-                  placeholder="مثال: 140"
-                  loading={loading}
-                  keyboardType="decimal-pad"
-                />
-              </View>
+              <Pressable
+                onPress={() => setShowSpecs((p) => !p)}
+                style={({ pressed }) => [
+                  styles.specToggle,
+                  pressed && styles.pressed,
+                  loading && styles.disabled,
+                ]}
+                disabled={loading}
+              >
+                <Text style={styles.specToggleText}>
+                  {showSpecs ? "إخفاء" : "إضافة"}
+                </Text>
+              </Pressable>
             </View>
+
+            {showSpecs && (
+              <View style={styles.grid3}>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="غرف"
+                    value={formData.bedrooms}
+                    onChangeText={(v) =>
+                      dispatchForm({
+                        type: "UPDATE_FIELD",
+                        field: "bedrooms",
+                        value: v,
+                      })
+                    }
+                    placeholder="مثال: 3"
+                    loading={loading}
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="حمامات"
+                    value={formData.bathrooms}
+                    onChangeText={(v) =>
+                      dispatchForm({
+                        type: "UPDATE_FIELD",
+                        field: "bathrooms",
+                        value: v,
+                      })
+                    }
+                    placeholder="مثال: 2"
+                    loading={loading}
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="مساحة (م²)"
+                    value={formData.area}
+                    onChangeText={(v) =>
+                      dispatchForm({
+                        type: "UPDATE_FIELD",
+                        field: "area",
+                        value: v,
+                      })
+                    }
+                    placeholder="مثال: 140"
+                    loading={loading}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              </View>
+            )}
 
             {errors.length > 0 && (
               <View style={{ marginBottom: 10 }}>
@@ -829,7 +984,11 @@ type Styles = {
   statusText: TextStyle;
   statusTextActive: TextStyle;
 
+  sectionHeaderRow: ViewStyle;
   sectionHint: TextStyle;
+  specToggle: ViewStyle;
+  specToggleText: TextStyle;
+
   grid3: ViewStyle;
 
   error: TextStyle;
@@ -921,7 +1080,6 @@ const styles = StyleSheet.create<Styles>({
   },
   inputRtl: { writingDirection: "rtl" as const },
 
-  // chips
   chipsRow: { flexDirection: "row", gap: 8, paddingVertical: 2 },
   chip: {
     paddingHorizontal: 12,
@@ -935,7 +1093,6 @@ const styles = StyleSheet.create<Styles>({
   chipText: { fontSize: 12, color: THEME.dark[100], fontFamily: FONT.medium },
   chipTextActive: { color: THEME.white.DEFAULT, fontFamily: FONT.bold },
 
-  // status
   statusRow: { flexDirection: "row-reverse", gap: 10, flexWrap: "wrap" },
   statusChip: {
     paddingHorizontal: 14,
@@ -956,11 +1113,8 @@ const styles = StyleSheet.create<Styles>({
     fontFamily: FONT.bold,
     color: THEME.dark[100],
   },
-  statusTextActive: {
-    color: THEME.primary,
-  },
+  statusTextActive: { color: THEME.primary },
 
-  // price row
   priceRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   currencyPill: {
     backgroundColor: THEME.primary,
@@ -969,18 +1123,37 @@ const styles = StyleSheet.create<Styles>({
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 56,
+    minWidth: 64,
   },
   currencyText: { color: THEME.white.DEFAULT, fontFamily: FONT.bold },
   priceInput: { flex: 1 },
 
-  sectionHint: {
+  sectionHeaderRow: {
     marginTop: 4,
     marginBottom: 10,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  sectionHint: {
     textAlign: "right",
     color: THEME.primary,
     fontFamily: FONT.bold,
     fontSize: 13,
+  },
+  specToggle: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(59,130,246,0.25)",
+    backgroundColor: "rgba(59,130,246,0.10)",
+  },
+  specToggleText: {
+    fontFamily: FONT.bold,
+    fontSize: 12,
+    color: THEME.primary,
   },
 
   grid3: { flexDirection: "row-reverse", gap: 10 },
@@ -996,12 +1169,10 @@ const styles = StyleSheet.create<Styles>({
     marginTop: 8,
     paddingVertical: 12,
     borderRadius: 100,
-    borderWidth: 1,
-    borderColor: "#F6B5B5",
-    backgroundColor: "#FDECEC",
+    backgroundColor: THEME.error,
     alignItems: "center",
   },
-  deleteText: { color: THEME.error, fontFamily: FONT.bold },
+  deleteText: { color: THEME.white.DEFAULT, fontFamily: FONT.bold },
 
   loadingText: {
     textAlign: "right",

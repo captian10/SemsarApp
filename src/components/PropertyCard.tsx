@@ -49,7 +49,10 @@ export default function PropertyCard({
   const price = Number(property.price ?? 0);
   const priceText = Number.isFinite(price) ? price.toLocaleString("en-EG") : "0";
 
-  const currency = property.currency ?? "EGP";
+const currency = (() => {
+  const c = String(property.currency ?? "EGP").trim().toUpperCase();
+  return c === "EGP" ? "جنيه" : c;
+})();
   const city = property.city ?? "—";
   const image = (property.cover_image || null) as string | null;
 

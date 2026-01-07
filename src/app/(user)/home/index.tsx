@@ -87,6 +87,33 @@ const sortLabel = (sort: Sort) =>
     ? "السعر: الأقل → الأعلى"
     : "السعر: الأعلى → الأقل";
 
+/* ----------------- Chips ----------------- */
+
+function TypeChip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.chip,
+        active && styles.chipActive,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export default function HomeScreen() {
   const { data, error, isLoading, isFetching, refetch } = usePropertyList();
 
@@ -288,6 +315,23 @@ export default function HomeScreen() {
               </Pressable>
             )}
           </View>
+
+          {/* ✅ Chips (type) */}
+          <FlatList
+            data={["الكل", ...PROPERTY_TYPES] as FilterType[]}
+            keyExtractor={(item) => String(item)}
+            horizontal
+            inverted // ✅ RTL
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsRow}
+            renderItem={({ item }) => (
+              <TypeChip
+                label={item}
+                active={type === item}
+                onPress={() => setType(item)}
+              />
+            )}
+          />
         </View>
       </View>
 
@@ -588,6 +632,31 @@ const styles = StyleSheet.create({
     borderColor: "rgba(59,130,246,0.18)",
   },
   resetPillText: { fontFamily: FONT.bold, fontSize: 12, color: THEME.primary },
+
+  /* ✅ Chips */
+  chipsRow: {
+    marginTop: 10,
+    paddingBottom: 2,
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.10)",
+    backgroundColor: "rgba(15,23,42,0.03)",
+  },
+  chipActive: {
+    backgroundColor: "rgba(59,130,246,0.10)",
+    borderColor: "rgba(59,130,246,0.35)",
+  },
+  chipText: {
+    fontSize: 12,
+    fontFamily: FONT.bold,
+    color: THEME.dark[100],
+  },
+  chipTextActive: { color: THEME.primary },
 
   content: { paddingHorizontal: 12, paddingTop: 6, paddingBottom: 24 },
   contentEmpty: { flexGrow: 1, justifyContent: "center" },

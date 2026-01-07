@@ -18,7 +18,14 @@ const toThrowingError = (e: PgErrorLike): Error => {
 };
 
 // ✅ Property Types
-export const PROPERTY_TYPES = ["شقة", "فيلا", "استوديو", "مكتب", "محل", "أرض"] as const;
+export const PROPERTY_TYPES = [
+  "شقة",
+  "محل",
+  "مخزن",
+  "أرض",
+  "غير ذلك",
+] as const;
+
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
 // ✅ DB status values (ENGLISH) — Recommended

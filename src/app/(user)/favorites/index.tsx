@@ -12,8 +12,42 @@ import {
 import { FONT } from "@/constants/Typography";
 import { THEME } from "@constants/Colors";
 
-import PropertyCard from "@components/PropertyCard";
 import { useMyFavorites, useToggleFavorite } from "@api/favorites";
+import PropertyCard from "@components/PropertyCard";
+
+function Button({
+  label,
+  onPress,
+  variant = "primary",
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  variant?: "primary" | "ghost";
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.btnBase,
+        variant === "ghost" ? styles.btnGhost : styles.btnPrimary,
+        disabled && { opacity: 0.7 },
+        pressed && !disabled && styles.btnPressed,
+      ]}
+    >
+      <Text
+        style={[
+          styles.btnTextBase,
+          variant === "ghost" ? styles.btnTextGhost : styles.btnTextPrimary,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
 
 export default function FavoritesScreen() {
   const { data, isLoading, isFetching, error, refetch } = useMyFavorites();
@@ -22,7 +56,7 @@ export default function FavoritesScreen() {
   const list = useMemo(() => data ?? [], [data]);
   const count = list.length;
 
-  const removingId = toggleFav.variables?.propertyId; // آخر عنصر بيتعمله toggle
+  const removingId = toggleFav.variables?.propertyId;
 
   if (isLoading) {
     return (
@@ -38,24 +72,17 @@ export default function FavoritesScreen() {
   if (error) {
     return (
       <View style={styles.screen}>
-        <Header count={count} />
-        <View style={styles.center}>
-          <Text style={styles.title}>حصل خطأ</Text>
-          <Text style={styles.muted}>فشل تحميل المفضلة.</Text>
+        <View style={styles.topRow}>
+          <Text style={styles.title}>المفضلة</Text>
+        </View>
 
-          <Pressable
-            onPress={() => refetch()}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              pressed && styles.pressed,
-              isFetching && { opacity: 0.7 },
-            ]}
+        <View style={styles.center}>
+          <Text style={styles.error}>حصل خطأ في تحميل المفضلة</Text>
+          <Button
+            label={isFetching ? "جاري المحاولة…" : "إعادة المحاولة"}
+            onPress={refetch}
             disabled={isFetching}
-          >
-            <Text style={styles.primaryBtnText}>
-              {isFetching ? "جاري المحاولة…" : "إعادة المحاولة"}
-            </Text>
-          </Pressable>
+          />
         </View>
       </View>
     );
@@ -63,7 +90,12 @@ export default function FavoritesScreen() {
 
   return (
     <View style={styles.screen}>
-      <Header count={count} />
+      {/* simple header */}
+      <View style={styles.topRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.subTitle}>عدد العناصر: {count}</Text>
+        </View>
+      </View>
 
       <FlatList
         data={list}
@@ -72,7 +104,13 @@ export default function FavoritesScreen() {
           const pid = String(item.property_id);
 
           return (
-            <View style={toggleFav.isPending && removingId === pid ? { opacity: 0.6 } : undefined}>
+            <View
+              style={
+                toggleFav.isPending && removingId === pid
+                  ? { opacity: 0.6 }
+                  : undefined
+              }
+            >
               <PropertyCard
                 hrefBase="/(user)/home"
                 property={item.property}
@@ -85,45 +123,28 @@ export default function FavoritesScreen() {
             </View>
           );
         }}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.content,
-          count === 0 && { flexGrow: 1, justifyContent: "center" },
-        ]}
         ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         ListFooterComponent={<View style={{ height: 18 }} />}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.listContent,
+          count === 0 && styles.listContentEmpty,
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={!!isFetching}
-            onRefresh={() => refetch()}
+            onRefresh={refetch}
             tintColor={THEME.primary}
           />
         }
         ListEmptyComponent={
           <View style={styles.center}>
-            <Text style={styles.title}>لا توجد مفضلة</Text>
+            <Text style={styles.emptyTitle}>مفيش مفضلة</Text>
             <Text style={styles.muted}>اضغط ♥ على أي عقار عشان يظهر هنا</Text>
-
-            <Pressable
-              onPress={() => refetch()}
-              style={({ pressed }) => [styles.ghostBtn, pressed && styles.pressed]}
-            >
-              <Text style={styles.ghostBtnText}>تحديث</Text>
-            </Pressable>
+            <Button label="تحديث" onPress={refetch} variant="ghost" />
           </View>
         }
       />
-    </View>
-  );
-}
-
-function Header({ count }: { count: number }) {
-  return (
-    <View style={styles.header}>
-      <View style={styles.headerRow}>
-        <Text style={styles.headerTitle}>المفضلة</Text>
-      </View>
-      <Text style={styles.headerSub}>{count} عنصر</Text>
     </View>
   );
 }
@@ -136,34 +157,51 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
 
-  header: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.06)",
-    padding: 14,
-    marginBottom: 12,
-  },
-  headerRow: {
+  topRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 12,
   },
-  headerTitle: {
-    fontSize: 18,
+
+  title: {
+    fontSize: 20,
     fontFamily: FONT.bold,
     color: THEME.dark[100],
     textAlign: "right",
   },
-  headerSub: {
-    marginTop: 6,
-    fontSize: 12,
-    fontFamily: FONT.medium,
+
+  subTitle: {
+    marginTop: 2,
+    fontSize: 13,
+    fontFamily: FONT.regular,
     color: THEME.gray[100],
     textAlign: "right",
   },
 
-  content: { paddingBottom: 10 },
+  refreshChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.10)",
+    backgroundColor: "#fff",
+  },
+
+  refreshChipText: {
+    fontSize: 13,
+    fontFamily: FONT.medium,
+    color: THEME.dark[100],
+  },
+
+  listContent: {
+    paddingBottom: 10,
+  },
+
+  listContentEmpty: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
 
   center: {
     flex: 1,
@@ -172,12 +210,14 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 16,
   },
-  title: {
+
+  emptyTitle: {
     fontSize: 15,
     fontFamily: FONT.bold,
     color: THEME.dark[100],
     textAlign: "center",
   },
+
   muted: {
     fontSize: 13,
     fontFamily: FONT.regular,
@@ -186,29 +226,42 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  primaryBtn: {
-    marginTop: 6,
-    width: "100%",
-    maxWidth: 260,
+  error: {
+    fontSize: 13,
+    fontFamily: FONT.medium,
+    color: THEME.error,
+    textAlign: "center",
+  },
+
+  btnBase: {
+    marginTop: 4,
+    alignSelf: "stretch",
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  btnPrimary: {
     backgroundColor: THEME.primary,
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
   },
-  primaryBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 13 },
-
-  ghostBtn: {
-    marginTop: 6,
-    width: "100%",
-    maxWidth: 260,
-    backgroundColor: "rgba(59,130,246,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(59,130,246,0.18)",
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
+  btnGhost: {
+    backgroundColor: THEME.primary,
   },
-  ghostBtnText: { color: THEME.primary, fontFamily: FONT.bold, fontSize: 13 },
 
-  pressed: { opacity: 0.92, transform: [{ scale: 0.995 }] },
+  btnTextBase: {
+    color: "#fff",
+    fontFamily: FONT.bold,
+    fontSize: 14,
+  },
+  btnTextPrimary: {
+    color: "#fff",
+  },
+  btnTextGhost: {
+    color: "#fff",
+  },
+
+  btnPressed: {
+    opacity: 0.9,
+  },
 });

@@ -1,9 +1,12 @@
-import React, { useCallback, useMemo, useState } from "react";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import * as Clipboard from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -11,19 +14,18 @@ import {
   Text,
   View,
   type ImageStyle,
-  type TextStyle,
-  type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
-import * as Clipboard from "expo-clipboard";
 
 import { FONT } from "@/constants/Typography";
-import { THEME } from "@constants/Colors";
 import RemoteImage from "@components/RemoteImage";
-import Button from "@components/Button";
+import { THEME } from "@constants/Colors";
 
-import { usePropertyWithImages, statusLabel, type PropertyRow } from "@api/properties";
+import {
+  statusLabel,
+  usePropertyWithImages,
+  type PropertyRow,
+} from "@api/properties";
 import { defaultPropertyImage } from "@components/PropertyCard";
 
 const formatMoney = (n: unknown) => {
@@ -41,6 +43,43 @@ const safeText = (v: unknown, fallback = "—") => {
   return s.length ? s : fallback;
 };
 
+// ✅ لو RemoteImage بيحتاج storage path فقط، نميّز بين URL و path
+const isHttpUrl = (v: unknown) => {
+  const s = String(v ?? "").trim();
+  return /^https?:\/\//i.test(s);
+};
+
+function SmartImage({
+  pathOrUrl,
+  fallback,
+  style,
+  resizeMode = "cover",
+}: {
+  pathOrUrl: string;
+  fallback: string;
+  style: any;
+  resizeMode?: any;
+}) {
+  const src = (pathOrUrl || "").trim();
+
+  // ✅ لو URL كامل → استخدم Image مباشرة
+  if (isHttpUrl(src)) {
+    return (
+      <Image source={{ uri: src }} style={style} resizeMode={resizeMode} />
+    );
+  }
+
+  // ✅ غير كده اعتبره storage path → RemoteImage
+  return (
+    <RemoteImage
+      path={src}
+      fallback={fallback}
+      style={style}
+      resizeMode={resizeMode}
+    />
+  );
+}
+
 export default function PropertyDetailsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
@@ -51,10 +90,14 @@ export default function PropertyDetailsScreen() {
     return (Array.isArray(raw) ? raw[0] : raw) as string | undefined;
   }, [params]);
 
-  const { data: property, error, isLoading, refetch, isFetching } =
-    usePropertyWithImages(id || "");
+  const {
+    data: property,
+    error,
+    isLoading,
+    refetch,
+    isFetching,
+  } = usePropertyWithImages(id || "");
 
-  // gallery index (for dots)
   const [activeIndex, setActiveIndex] = useState(0);
 
   const images = useMemo(() => {
@@ -62,21 +105,26 @@ export default function PropertyDetailsScreen() {
     const list = Array.isArray(p?.images) ? p!.images : [];
     const cover = p?.cover_image ? [{ url: p.cover_image }] : [];
 
-    // ✅ لو فيه صور في property_images استخدمها، وإلا استخدم cover_image
     const finalList = list.length
       ? list.map((x) => ({ url: x.url }))
       : cover.length
       ? cover
       : [{ url: defaultPropertyImage }];
 
-    // ✅ فلترة قيم فاضية
-    return finalList.filter((x) => String(x?.url ?? "").trim().length > 0);
+    return finalList
+      .map((x) => ({ url: String(x?.url ?? "").trim() }))
+      .filter((x) => x.url.length > 0);
   }, [property]);
 
   const priceText = useMemo(() => {
     const p = Number((property as any)?.price ?? 0);
-    const currency = safeText((property as any)?.currency, "EGP");
-    return `${formatMoney(p)} ${currency}`;
+
+    const c = String((property as any)?.currency ?? "EGP")
+      .trim()
+      .toUpperCase();
+    const currencyLabel = c === "EGP" ? "جنيه" : c;
+
+    return `${formatMoney(p)} ${currencyLabel}`;
   }, [property]);
 
   const title = useMemo(() => safeText((property as any)?.title), [property]);
@@ -102,8 +150,8 @@ export default function PropertyDetailsScreen() {
   const bathrooms = (property as any)?.bathrooms;
   const area = (property as any)?.area_sqm;
 
-  // ✅ ضع رقم السمسار/الشركة عندك هنا (أو جيبه من DB لو موجود)
-  const AGENT_PHONE = "01000000000";
+  // ✅ رقم واحد فقط للتواصل (بدون تكرار)
+  const AGENT_PHONE = "01012433451";
 
   const dial = useCallback(async (phoneNumber: string) => {
     const p = phoneNumber.replace(/\s+/g, "");
@@ -121,36 +169,30 @@ export default function PropertyDetailsScreen() {
     Alert.alert(titleMsg, `تم نسخ: ${text}`);
   }, []);
 
-  const openWhatsApp = useCallback(async (phone: string) => {
-    const raw = phone.replace(/\D/g, "");
-    if (!raw) return;
+  const openWhatsApp = useCallback(
+    async (phone: string) => {
+      const raw = phone.replace(/\D/g, "");
+      if (!raw) return;
 
-    // ✅ مصر: +20 (لو الرقم يبدأ بـ 0)
-    const international = raw.startsWith("0")
-      ? `20${raw.replace(/^0/, "")}`
-      : raw;
+      // ✅ مصر: +20 (لو الرقم يبدأ بـ 0)
+      const international = raw.startsWith("0")
+        ? `20${raw.replace(/^0/, "")}`
+        : raw;
 
-    const msg = encodeURIComponent(`السلام عليكم، مهتم بالعقار: ${title}`);
-    const waApp = `whatsapp://send?phone=${international}&text=${msg}`;
-    const waWeb = `https://wa.me/${international}?text=${msg}`;
+      const msg = encodeURIComponent(`السلام عليكم، مهتم بالعقار: ${title}`);
+      const waApp = `whatsapp://send?phone=${international}&text=${msg}`;
+      const waWeb = `https://wa.me/${international}?text=${msg}`;
 
-    try {
-      const can = await Linking.canOpenURL(waApp);
-      if (can) return Linking.openURL(waApp);
-      return Linking.openURL(waWeb);
-    } catch {
-      Alert.alert("واتساب غير متاح", "لم نستطع فتح واتساب على هذا الجهاز.");
-    }
-  }, [title]);
-
-  const goToRequest = useCallback(() => {
-    // ✅ لو عندك صفحة عمل طلب: /(user)/requests/create?property_id=...
-    // عدّلها حسب مساراتك
-    router.push({
-      pathname: "/(user)/requests/create" as any,
-      params: { property_id: id ?? "" },
-    });
-  }, [router, id]);
+      try {
+        const can = await Linking.canOpenURL(waApp);
+        if (can) return Linking.openURL(waApp);
+        return Linking.openURL(waWeb);
+      } catch {
+        Alert.alert("واتساب غير متاح", "لم نستطع فتح واتساب على هذا الجهاز.");
+      }
+    },
+    [title]
+  );
 
   if (!id) {
     return (
@@ -208,12 +250,15 @@ export default function PropertyDetailsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: 210 + insets.bottom },
+          // ✅ مساحة للبوتوم بار
+          { paddingBottom: 170 + insets.bottom },
         ]}
       >
         {/* Gallery */}
         <View style={styles.galleryCard}>
           <FlatList
+            style={{ width: "100%" }} // ✅ مهم
+            contentContainerStyle={{ width: "100%" }} // ✅ مهم
             data={images}
             keyExtractor={(_, idx) => `img-${idx}`}
             horizontal
@@ -227,8 +272,8 @@ export default function PropertyDetailsScreen() {
             }}
             renderItem={({ item }) => (
               <View style={styles.imageSlide}>
-                <RemoteImage
-                  path={item.url}
+                <SmartImage
+                  pathOrUrl={item.url}
                   fallback={defaultPropertyImage}
                   style={styles.image}
                   resizeMode="cover"
@@ -289,45 +334,9 @@ export default function PropertyDetailsScreen() {
           <Text style={styles.sectionTitle}>الوصف</Text>
           <Text style={styles.descText}>{description}</Text>
         </View>
-
-        {/* Actions */}
-        <View style={styles.actionsCard}>
-          <Text style={styles.sectionTitle}>تواصل</Text>
-
-          <View style={styles.actionsRow}>
-            <Pressable
-              onPress={() => dial(AGENT_PHONE)}
-              style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
-            >
-              <FontAwesome name="phone" size={14} color="#fff" />
-              <Text style={styles.actionText}>اتصال</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => openWhatsApp(AGENT_PHONE)}
-              style={({ pressed }) => [styles.actionBtnGhost, pressed && styles.pressed]}
-            >
-              <FontAwesome name="whatsapp" size={14} color="#25D366" />
-              <Text style={styles.actionTextGhost}>واتساب</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => copy(AGENT_PHONE, "تم نسخ رقم الهاتف")}
-              style={({ pressed }) => [styles.actionBtnGhost, pressed && styles.pressed]}
-            >
-              <FontAwesome name="copy" size={14} color={THEME.primary} />
-              <Text style={styles.actionTextGhost}>نسخ الرقم</Text>
-            </Pressable>
-          </View>
-
-          <View style={{ height: 10 }} />
-
-          {/* ✅ CTA: request / inquiry */}
-          <Button text="إرسال استفسار" onPress={goToRequest} />
-        </View>
       </ScrollView>
 
-      {/* Bottom bar */}
+      {/* ✅ Bottom bar (يلزق في آخر الشاشة) */}
       <View style={styles.bottom} pointerEvents="box-none">
         <View style={styles.bottomCard} pointerEvents="auto">
           <View style={styles.bottomRow}>
@@ -335,19 +344,29 @@ export default function PropertyDetailsScreen() {
             <Text style={styles.bottomValue}>{priceText}</Text>
           </View>
 
+          {/* ✅ زرارين فقط: اتصال + واتساب (بدون نسخ) */}
           <View style={styles.bottomBtns}>
             <Pressable
               onPress={() => dial(AGENT_PHONE)}
-              style={({ pressed }) => [styles.bottomBtn, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.bottomBtn,
+                pressed && styles.pressed,
+              ]}
             >
               <Text style={styles.bottomBtnText}>اتصال الآن</Text>
             </Pressable>
 
             <Pressable
               onPress={() => openWhatsApp(AGENT_PHONE)}
-              style={({ pressed }) => [styles.bottomBtnGhost, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.bottomBtnGhost,
+                pressed && styles.pressed,
+              ]}
             >
-              <Text style={styles.bottomBtnGhostText}>واتساب</Text>
+              <View style={styles.waRow}>
+                <FontAwesome name="whatsapp" size={16} color="#25D366" />
+                <Text style={styles.bottomBtnGhostText}>واتساب</Text>
+              </View>
             </Pressable>
           </View>
         </View>
@@ -540,51 +559,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  actionsCard: {
-    backgroundColor: "#fff",
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.06)",
-    padding: 12,
-    gap: 10,
-  },
-  actionsRow: {
-    flexDirection: "row-reverse",
-    flexWrap: "wrap",
-    gap: 10,
-    justifyContent: "flex-start",
-  },
-  actionBtn: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: THEME.primary,
-  },
-  actionText: {
-    fontSize: 12,
-    fontFamily: FONT.bold,
-    color: "#fff",
-  },
-  actionBtnGhost: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.10)",
-    backgroundColor: "rgba(15,23,42,0.03)",
-  },
-  actionTextGhost: {
-    fontSize: 12,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-  },
-
+  // ✅ Bottom bar
   bottom: { position: "absolute", left: 12, right: 12, bottom: 12 },
   bottomCard: {
     backgroundColor: "rgba(255,255,255,0.95)",
@@ -633,10 +608,18 @@ const styles = StyleSheet.create({
     borderColor: "rgba(15,23,42,0.12)",
     backgroundColor: "rgba(15,23,42,0.03)",
     alignItems: "center",
+    justifyContent: "center",
   },
   bottomBtnGhostText: {
     color: THEME.dark[100],
     fontFamily: FONT.bold,
     fontSize: 13,
+  },
+
+  waRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
 });

@@ -18,7 +18,6 @@ import { supabase } from "@lib/supabase";
 import { THEME } from "@constants/Colors";
 import { FONT } from "@/constants/Typography";
 
-const RESTAURANT_PHONE = "01009401881";
 const DEV_PHONE = "01012433451";
 
 const safeString = (v: any, fallback = "") =>
@@ -30,6 +29,7 @@ export default function Profile() {
 
   const [email, setEmail] = useState<string>("");
   const [phone, setPhone] = useState<string>("");
+  const [fullName, setFullName] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
@@ -48,12 +48,20 @@ export default function Profile() {
 
         setEmail(user.email ?? "");
 
+        // metadata (optional)
         const metaPhone = safeString((user.user_metadata as any)?.phone, "");
-        if (metaPhone) setPhone(metaPhone);
+        const metaName =
+          safeString((user.user_metadata as any)?.full_name, "") ||
+          safeString((user.user_metadata as any)?.fullName, "") ||
+          safeString((user.user_metadata as any)?.name, "");
 
+        if (metaPhone) setPhone(metaPhone);
+        if (metaName) setFullName(metaName);
+
+        // DB profile (source of truth)
         const { data: profile, error: pErr } = await supabase
           .from("profiles")
-          .select("phone")
+          .select("phone, full_name")
           .eq("id", user.id)
           .single();
 
@@ -61,7 +69,10 @@ export default function Profile() {
 
         if (!pErr && profile) {
           const dbPhone = safeString((profile as any)?.phone, "");
+          const dbName = safeString((profile as any)?.full_name, "");
+
           if (dbPhone) setPhone(dbPhone);
+          if (dbName) setFullName(dbName);
         }
       } finally {
         if (!cancelled) setFetching(false);
@@ -73,8 +84,15 @@ export default function Profile() {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       const u = session?.user;
       setEmail(u?.email ?? "");
+
       const metaPhone = safeString((u?.user_metadata as any)?.phone, "");
-      setPhone(metaPhone);
+      const metaName =
+        safeString((u?.user_metadata as any)?.full_name, "") ||
+        safeString((u?.user_metadata as any)?.fullName, "") ||
+        safeString((u?.user_metadata as any)?.name, "");
+
+      if (metaPhone) setPhone(metaPhone);
+      if (metaName) setFullName(metaName);
     });
 
     return () => {
@@ -158,6 +176,15 @@ export default function Profile() {
           ) : (
             <>
               <View style={styles.field}>
+                <Text style={styles.label}>الاسم الكامل</Text>
+                <Text style={styles.value} numberOfLines={1}>
+                  {fullName || "—"}
+                </Text>
+              </View>
+
+              <View style={styles.divider} />
+
+              <View style={styles.field}>
                 <Text style={styles.label}>البريد الإلكتروني</Text>
                 <Text style={styles.value} numberOfLines={1}>
                   {email || "—"}
@@ -190,34 +217,6 @@ export default function Profile() {
                   <Text style={styles.logoutText}>تسجيل الخروج</Text>
                 )}
               </Pressable>
-
-              {/* ✅ Contact restaurant (dial + copy) */}
-              <View style={styles.divider} />
-
-              <View style={styles.contactBox}>
-                <Text style={styles.contactLabel}>للتواصل مع المطعم:</Text>
-
-                <Pressable
-                  onPress={() => dial(RESTAURANT_PHONE)}
-                  style={({ pressed }) => [
-                    styles.phonePill,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.phoneText}>{RESTAURANT_PHONE}</Text>
-                  <Text style={styles.phoneIcon}>📞</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => copy(RESTAURANT_PHONE, "تم النسخ")}
-                  style={({ pressed }) => [
-                    styles.copyBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.copyText}>نسخ رقم المطعم</Text>
-                </Pressable>
-              </View>
             </>
           )}
         </View>
@@ -291,14 +290,6 @@ type Styles = {
 
   loadingRow: ViewStyle;
   loadingText: TextStyle;
-
-  contactBox: ViewStyle;
-  contactLabel: TextStyle;
-  phonePill: ViewStyle;
-  phoneText: TextStyle;
-  phoneIcon: TextStyle;
-  copyBtn: ViewStyle;
-  copyText: TextStyle;
 
   devBar: ViewStyle;
   devText: TextStyle;
@@ -412,59 +403,6 @@ const styles = StyleSheet.create<Styles>({
     fontFamily: FONT.regular,
     color: THEME.gray[100],
     textAlign: "right",
-  },
-
-  contactBox: {
-    width: "100%",
-    gap: 8,
-    alignItems: "flex-end",
-  },
-
-  contactLabel: {
-    fontSize: 12,
-    fontFamily: FONT.regular,
-    color: THEME.gray[100],
-    textAlign: "right",
-  },
-
-  phonePill: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.10)",
-    backgroundColor: "rgba(15, 23, 42, 0.03)",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-
-  phoneText: {
-    fontSize: 14,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-  },
-
-  phoneIcon: {
-    fontSize: 16,
-  },
-
-  copyBtn: {
-    width: "100%",
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.10)",
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  copyText: {
-    fontSize: 13,
-    fontFamily: FONT.medium,
-    color: THEME.primary,
   },
 
   devBar: {

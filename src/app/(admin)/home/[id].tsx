@@ -1,26 +1,11 @@
-// (admin)/home/[id].tsx  (مثال)
-// ✅ Real Estate Admin Property Details Screen (Improved Version)
-//
-// Improvements:
-// - Renamed component to AdminPropertyDetailsScreen for clarity (properties, not products).
-// - Fixed categoryText to use property.property_type instead of non-existent 'category'.
-// - Added more property details: description, location (city/address), specs (bedrooms, bathrooms, area), status (translated to Arabic).
-// - Implemented delete functionality with confirmation alert using useDeleteProperty hook.
-// - Styled delete button as destructive (red colors) to distinguish from edit.
-// - Adjusted badge colors to use THEME.primary for consistency (removed yellow).
-// - Memoized more computations (e.g., statusLabel).
-// - Added accessibility labels to buttons and key elements.
-// - Improved error handling: Show error message if available.
-// - Optimized loading/error states with better UI.
-// - Added refresh on pull for ScrollView.
-// - Handled optional fields gracefully (show '—' if null/empty).
-// - Minor style tweaks: Increased padding, better text truncation, RTL support.
+// (admin)/home/[id].tsx
+// ✅ Admin Property Details Screen (1:1 image + buttons next to each other)
 
 import { useDeleteProperty, useProperty } from "@api/properties";
 import RemoteImage from "@components/RemoteImage";
 import { FontAwesome } from "@expo/vector-icons";
 import { Link, Stack, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -39,39 +24,62 @@ import { FONT } from "@/constants/Typography";
 import { THEME } from "@constants/Colors";
 import { defaultPropertyImage } from "../../../components/PropertyCard";
 
-const statusLabels = {
+const statusLabels: Record<string, string> = {
   available: "متاح",
-  sold: "مباع",
-  rented: "مؤجر",
-} as const;
+  sold: "للبيع",
+  rented: "للإيجار",
+  pending: "قيد المراجعة",
+  hidden: "مخفي",
+};
 
 export default function AdminPropertyDetailsScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
+  const { id: idParam } = useLocalSearchParams();
 
   const id = useMemo(() => {
-    const raw = params?.id;
-    return String(Array.isArray(raw) ? raw[0] : raw || "");
-  }, [params?.id]);
+    const raw = Array.isArray(idParam) ? idParam[0] : idParam;
+    return typeof raw === "string" ? raw.trim() : "";
+  }, [idParam]);
 
   const { data: property, error, isLoading, refetch } = useProperty(id);
   const { mutate: deleteProperty, isPending: isDeleting } = useDeleteProperty();
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const priceText = useMemo(() => {
-    const p = Number(property?.price ?? 0)
-    return Number.isFinite(p) ? p.toFixed(2) : "0.00";
+    const p = Number(property?.price);
+    if (!Number.isFinite(p)) return "0";
+    return p.toLocaleString("ar-EG");
   }, [property?.price]);
 
-  const typeText = useMemo(() => {
-    return property?.property_type ?? "—";
-  }, [property?.property_type]);
+  const currencyText = useMemo(() => {
+    const c = String(property?.currency ?? "EGP").toUpperCase();
+    if (c === "EGP") return "جنيه";
+    return c;
+  }, [property?.currency]);
+
+  const typeText = useMemo(
+    () => property?.property_type ?? "—",
+    [property?.property_type]
+  );
 
   const statusText = useMemo(() => {
-    return property?.status ? statusLabels[property.status as keyof typeof statusLabels] ?? property.status : "—";
+    const s = String(property?.status ?? "").trim();
+    return s ? statusLabels[s] ?? s : "—";
   }, [property?.status]);
 
   const descriptionText = useMemo(() => {
-    return property?.description?.trim() ?? "—";
+    const d = property?.description?.trim();
+    return d && d.length ? d : "—";
   }, [property?.description]);
 
   const locationText = useMemo(() => {
@@ -82,19 +90,19 @@ export default function AdminPropertyDetailsScreen() {
   }, [property?.city, property?.address]);
 
   const specsText = useMemo(() => {
-    const bedrooms = property?.bedrooms != null ? `${property.bedrooms} غرف` : "";
-    const bathrooms = property?.bathrooms != null ? `${property.bathrooms} حمامات` : "";
+    const bedrooms =
+      property?.bedrooms != null ? `${property.bedrooms} غرف` : "";
+    const bathrooms =
+      property?.bathrooms != null ? `${property.bathrooms} حمامات` : "";
     const area = property?.area_sqm != null ? `${property.area_sqm} م²` : "";
     return [bedrooms, bathrooms, area].filter(Boolean).join(" • ") || "—";
   }, [property?.bedrooms, property?.bathrooms, property?.area_sqm]);
 
   const onDelete = () => {
-    if (isDeleting) return;
+    if (!id || isDeleting) return;
 
     deleteProperty(id, {
-      onSuccess: () => {
-        router.replace("/(admin)");
-      },
+      onSuccess: () => router.replace("/(admin)"),
       onError: (err: any) => {
         Alert.alert("خطأ", err?.message || "فشل حذف العقار");
       },
@@ -102,11 +110,31 @@ export default function AdminPropertyDetailsScreen() {
   };
 
   const confirmDelete = () => {
+    if (!id || isDeleting) return;
+
     Alert.alert("تأكيد الحذف", "هل أنت متأكد أنك تريد حذف هذا العقار؟", [
       { text: "إلغاء", style: "cancel" },
       { text: "حذف", style: "destructive", onPress: onDelete },
     ]);
   };
+
+  if (!id) {
+    return (
+      <View style={styles.stateWrap}>
+        <Text style={styles.errorTitle}>معرّف العقار غير صحيح</Text>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [
+            styles.retryBtn,
+            pressed && { opacity: 0.85 },
+          ]}
+          accessibilityLabel="رجوع"
+        >
+          <Text style={styles.retryText}>رجوع</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -122,12 +150,15 @@ export default function AdminPropertyDetailsScreen() {
       <View style={styles.stateWrap}>
         <Text style={styles.errorTitle}>حصل خطأ</Text>
         <Text style={styles.stateText}>
-          {error?.message || "فشل تحميل البيانات."}
+          {(error as any)?.message || "فشل تحميل البيانات."}
         </Text>
 
         <Pressable
           onPress={() => refetch()}
-          style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.85 }]}
+          style={({ pressed }) => [
+            styles.retryBtn,
+            pressed && { opacity: 0.85 },
+          ]}
           accessibilityLabel="إعادة المحاولة"
         >
           <Text style={styles.retryText}>إعادة المحاولة</Text>
@@ -151,7 +182,10 @@ export default function AdminPropertyDetailsScreen() {
           },
           headerRight: () => (
             <Link
-              href={{ pathname: "/(admin)/home/create", params: { id: property.id } }}
+              href={{
+                pathname: "/(admin)/home/create",
+                params: { id: property.id },
+              }}
               asChild
             >
               <Pressable
@@ -173,7 +207,7 @@ export default function AdminPropertyDetailsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={refetch} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
         {/* Image Card */}
@@ -184,9 +218,10 @@ export default function AdminPropertyDetailsScreen() {
             style={styles.image}
             resizeMode="cover"
           />
+
           <View style={styles.badge}>
             <Text style={styles.badgePrice}>{priceText}</Text>
-            <Text style={styles.badgeCurrency}>{property.currency ?? "جنيه"}</Text>
+            <Text style={styles.badgeCurrency}>{currencyText}</Text>
           </View>
         </View>
 
@@ -228,10 +263,30 @@ export default function AdminPropertyDetailsScreen() {
           <Text style={styles.sectionTitle}>المواصفات</Text>
           <Text style={styles.sub}>{specsText}</Text>
 
-          <Text style={styles.subHint}>يمكنك تعديل العقار من زر القلم بالأعلى.</Text>
+          <Text style={styles.subHint}>
+            يمكنك تعديل العقار من زر القلم بالأعلى.
+          </Text>
 
-          {/* Action Buttons for Admin */}
+          {/* ✅ Buttons next to each other (RTL: right-to-left) */}
           <View style={styles.actions}>
+            {/* تعديل */}
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: "/(admin)/home/create",
+                  params: { id: property.id },
+                })
+              }
+              style={({ pressed }) => [
+                styles.actionBtn,
+                pressed && { opacity: 0.85 },
+              ]}
+              accessibilityLabel="تعديل العقار"
+            >
+              <Text style={styles.actionBtnText}>تعديل</Text>
+            </Pressable>
+
+            {/* حذف */}
             <Pressable
               onPress={isDeleting ? undefined : confirmDelete}
               style={({ pressed }) => [
@@ -246,20 +301,6 @@ export default function AdminPropertyDetailsScreen() {
                 {isDeleting ? "جاري الحذف..." : "حذف"}
               </Text>
             </Pressable>
-            <Link
-              href={{ pathname: "/(admin)/home/create", params: { id: property.id } }}
-              asChild
-            >
-              <Pressable
-                style={({ pressed }) => [
-                  styles.actionBtn,
-                  pressed && { opacity: 0.85 },
-                ]}
-                accessibilityLabel="تعديل العقار"
-              >
-                <Text style={styles.actionBtnText}>تعديل</Text>
-              </Pressable>
-            </Link>
           </View>
         </View>
       </ScrollView>
@@ -300,7 +341,6 @@ type Styles = {
 
 const styles = StyleSheet.create<Styles>({
   screen: { flex: 1, backgroundColor: THEME.white[100] },
-
   content: { padding: 16, paddingBottom: 32, gap: 16 },
 
   stateWrap: {
@@ -331,11 +371,7 @@ const styles = StyleSheet.create<Styles>({
     paddingVertical: 14,
     borderRadius: 16,
   },
-  retryText: {
-    color: "#fff",
-    fontFamily: FONT.bold,
-    fontSize: 14,
-  },
+  retryText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
 
   iconBtn: {
     marginRight: 12,
@@ -362,7 +398,9 @@ const styles = StyleSheet.create<Styles>({
     shadowOffset: { width: 0, height: 10 },
     elevation: 3,
   },
-  image: { width: "100%", aspectRatio: 16 / 9, borderRadius: 16 },
+
+  // ✅ 1:1 ratio
+  image: { width: "100%", aspectRatio: 1, borderRadius: 16 },
 
   badge: {
     position: "absolute",
@@ -379,7 +417,11 @@ const styles = StyleSheet.create<Styles>({
     borderRadius: 999,
   },
   badgePrice: { fontSize: 14, color: THEME.primary, fontFamily: FONT.bold },
-  badgeCurrency: { fontSize: 12, color: THEME.primary, fontFamily: FONT.medium },
+  badgeCurrency: {
+    fontSize: 12,
+    color: THEME.primary,
+    fontFamily: FONT.medium,
+  },
 
   info: {
     backgroundColor: "#fff",
@@ -395,6 +437,7 @@ const styles = StyleSheet.create<Styles>({
     color: THEME.dark[100],
     fontFamily: FONT.bold,
     textAlign: "right",
+    writingDirection: "rtl",
   },
 
   sectionTitle: {
@@ -403,6 +446,7 @@ const styles = StyleSheet.create<Styles>({
     fontFamily: FONT.bold,
     textAlign: "right",
     marginTop: 8,
+    writingDirection: "rtl",
   },
 
   description: {
@@ -411,6 +455,7 @@ const styles = StyleSheet.create<Styles>({
     fontFamily: FONT.regular,
     textAlign: "right",
     lineHeight: 20,
+    writingDirection: "rtl",
   },
 
   sub: {
@@ -418,6 +463,7 @@ const styles = StyleSheet.create<Styles>({
     color: THEME.dark[100],
     fontFamily: FONT.regular,
     textAlign: "right",
+    writingDirection: "rtl",
   },
 
   subHint: {
@@ -426,6 +472,7 @@ const styles = StyleSheet.create<Styles>({
     fontFamily: FONT.regular,
     textAlign: "right",
     marginTop: 8,
+    writingDirection: "rtl",
   },
 
   metaRow: { flexDirection: "row-reverse", gap: 10, flexWrap: "wrap" },
@@ -444,12 +491,13 @@ const styles = StyleSheet.create<Styles>({
   metaLabel: { fontSize: 12, color: THEME.gray[100], fontFamily: FONT.medium },
   metaValue: { fontSize: 13, color: THEME.dark[100], fontFamily: FONT.bold },
 
+  // ✅ keep buttons next to each other
   actions: {
     flexDirection: "row-reverse",
     gap: 12,
     marginTop: 24,
-    justifyContent: "space-between",
   },
+
   actionBtn: {
     flex: 1,
     backgroundColor: THEME.primary,
@@ -457,11 +505,8 @@ const styles = StyleSheet.create<Styles>({
     borderRadius: 16,
     alignItems: "center",
   },
-  actionBtnText: {
-    color: "#fff",
-    fontFamily: FONT.bold,
-    fontSize: 14,
-  },
+  actionBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
+
   deleteBtn: {
     flex: 1,
     backgroundColor: THEME.error,
@@ -469,9 +514,5 @@ const styles = StyleSheet.create<Styles>({
     borderRadius: 16,
     alignItems: "center",
   },
-  deleteBtnText: {
-    color: "#fff",
-    fontFamily: FONT.bold,
-    fontSize: 14,
-  },
+  deleteBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
 });
