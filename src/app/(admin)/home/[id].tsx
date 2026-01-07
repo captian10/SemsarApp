@@ -1,8 +1,10 @@
-// (admin)/home/[id].tsx
-// ✅ Admin Property Details Screen (1:1 image + buttons next to each other)
+// src/app/(admin)/home/[id].tsx
+// ✅ Admin Property Details Screen (Multi images gallery + actions next to each other)
 
 import { useDeleteProperty, useProperty } from "@api/properties";
 import { usePropertyContact } from "@api/property-contacts";
+import { usePropertyImages } from "@api/property-images";
+
 import RemoteImage from "@components/RemoteImage";
 import { FontAwesome } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
@@ -11,12 +13,14 @@ import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type ImageStyle,
   type TextStyle,
   type ViewStyle,
@@ -42,6 +46,7 @@ const safeText = (v: unknown, fallback = "—") => {
 export default function AdminPropertyDetailsScreen() {
   const router = useRouter();
   const { id: idParam } = useLocalSearchParams();
+  const { width: W } = useWindowDimensions();
 
   const id = useMemo(() => {
     const raw = Array.isArray(idParam) ? idParam[0] : idParam;
@@ -54,12 +59,20 @@ export default function AdminPropertyDetailsScreen() {
   // ✅ contact info (Admin-only by RLS)
   const { data: contact } = usePropertyContact(id);
 
+  // ✅ images from table (MOST reliable)
+  const {
+    data: imagesRows,
+    refetch: refetchImages,
+    isFetching: isFetchingImages,
+  } = usePropertyImages(id);
+
   const [refreshing, setRefreshing] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const onRefresh = async () => {
     try {
       setRefreshing(true);
-      await refetch();
+      await Promise.allSettled([refetch(), refetchImages()]);
     } finally {
       setRefreshing(false);
     }
@@ -71,6 +84,32 @@ export default function AdminPropertyDetailsScreen() {
     await Clipboard.setStringAsync(v);
     Alert.alert(title, `تم نسخ: ${v}`);
   };
+
+  const images = useMemo(() => {
+    const rows = Array.isArray(imagesRows) ? imagesRows : [];
+    const fromTable = rows
+      .slice()
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      .map((x) => String(x?.url ?? "").trim())
+      .filter(Boolean);
+
+    const cover = String(property?.cover_image ?? "").trim();
+
+    const list =
+      fromTable.length > 0
+        ? fromTable
+        : cover
+        ? [cover]
+        : [defaultPropertyImage];
+
+    // normalize to objects for FlatList
+    return list.map((url) => ({ url }));
+  }, [imagesRows, property?.cover_image]);
+
+  const cardW = useMemo(() => {
+    // نفس padding بتاع content: 16 يمين + 16 شمال
+    return Math.max(W - 32, 1);
+  }, [W]);
 
   const priceText = useMemo(() => {
     const p = Number(property?.price);
@@ -106,7 +145,6 @@ export default function AdminPropertyDetailsScreen() {
     return [city, address].filter(Boolean).join("، ");
   }, [property?.city, property?.address]);
 
-  // ✅ optional specs: hide if null/0
   const specsText = useMemo(() => {
     const b = Number(property?.bedrooms ?? 0);
     const ba = Number(property?.bathrooms ?? 0);
@@ -119,7 +157,6 @@ export default function AdminPropertyDetailsScreen() {
     return [bedrooms, bathrooms, area].filter(Boolean).join(" • ") || "—";
   }, [property?.bedrooms, property?.bathrooms, property?.area_sqm]);
 
-  // ✅ owner contact (optional)
   const ownerName = useMemo(() => safeText(contact?.owner_name, ""), [contact]);
   const ownerPhone = useMemo(() => safeText(contact?.owner_phone, ""), [contact]);
   const hasOwner = useMemo(
@@ -236,22 +273,69 @@ export default function AdminPropertyDetailsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing || isFetchingImages}
+            onRefresh={onRefresh}
+          />
         }
       >
-        {/* Image Card */}
-        <View style={styles.imageCard}>
-          <RemoteImage
-            path={property.cover_image}
-            fallback={defaultPropertyImage}
-            style={styles.image}
-            resizeMode="cover"
+        {/* ✅ Gallery Card */}
+        <View style={[styles.imageCard, { width: cardW }]}>
+          <FlatList
+            data={images}
+            horizontal
+            pagingEnabled
+            bounces={false}
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(it, idx) => `${it.url}-${idx}`}
+            onMomentumScrollEnd={(e) => {
+              const x = e.nativeEvent.contentOffset.x;
+              const idx = Math.round(x / Math.max(cardW, 1));
+              setActiveIndex(idx);
+            }}
+            renderItem={({ item }) => (
+              <View style={{ width: cardW }}>
+                <RemoteImage
+                  path={item.url}
+                  fallback={defaultPropertyImage}
+                  style={styles.image}
+                  resizeMode="cover"
+                />
+              </View>
+            )}
+            getItemLayout={(_, index) => ({
+              length: cardW,
+              offset: cardW * index,
+              index,
+            })}
           />
 
+          {/* ✅ price badge */}
           <View style={styles.badge}>
             <Text style={styles.badgePrice}>{priceText}</Text>
             <Text style={styles.badgeCurrency}>{currencyText}</Text>
           </View>
+
+          {/* ✅ counter */}
+          {images.length > 1 && (
+            <View style={styles.counterPill} pointerEvents="none">
+              <Text style={styles.counterText}>
+                {activeIndex + 1}/{images.length}
+              </Text>
+            </View>
+          )}
+
+          {/* ✅ dots */}
+          {images.length > 1 && (
+            <View style={styles.dots} pointerEvents="none">
+              {images.map((_, i) => (
+                <View
+                  key={`dot-${i}`}
+                  style={[styles.dot, i === activeIndex && styles.dotActive]}
+                />
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Info */}
@@ -325,7 +409,9 @@ export default function AdminPropertyDetailsScreen() {
 
                     <Pressable
                       onPress={() => copyText(ownerPhone, "تم نسخ رقم الموبايل")}
-                      onLongPress={() => copyText(ownerPhone, "تم نسخ رقم الموبايل")}
+                      onLongPress={() =>
+                        copyText(ownerPhone, "تم نسخ رقم الموبايل")
+                      }
                       style={({ pressed }) => [
                         styles.ownerValuePress,
                         pressed && styles.pressed,
@@ -343,9 +429,7 @@ export default function AdminPropertyDetailsScreen() {
             </>
           )}
 
-          <Text style={styles.subHint}>
-            يمكنك تعديل العقار من زر القلم بالأعلى.
-          </Text>
+          <Text style={styles.subHint}>يمكنك تعديل العقار من زر القلم بالأعلى.</Text>
 
           {/* ✅ Buttons next to each other */}
           <View style={styles.actions}>
@@ -395,11 +479,19 @@ type Styles = {
   retryBtn: ViewStyle;
   retryText: TextStyle;
   iconBtn: ViewStyle;
+
   imageCard: ViewStyle;
   image: ImageStyle;
   badge: ViewStyle;
   badgePrice: TextStyle;
   badgeCurrency: TextStyle;
+
+  counterPill: ViewStyle;
+  counterText: TextStyle;
+  dots: ViewStyle;
+  dot: ViewStyle;
+  dotActive: ViewStyle;
+
   info: ViewStyle;
   title: TextStyle;
   sectionTitle: TextStyle;
@@ -473,11 +565,13 @@ const styles = StyleSheet.create<Styles>({
     borderColor: "rgba(59,130,246,0.18)",
   },
 
+  // ✅ Gallery card (no inner padding + overflow hidden)
   imageCard: {
     position: "relative",
+    alignSelf: "center",
     backgroundColor: "#fff",
     borderRadius: 22,
-    padding: 12,
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.06)",
     shadowColor: "#000",
@@ -486,13 +580,13 @@ const styles = StyleSheet.create<Styles>({
     shadowOffset: { width: 0, height: 10 },
     elevation: 3,
   },
-
-  image: { width: "100%", aspectRatio: 1, borderRadius: 16 },
+  // ✅ square images
+  image: { width: "100%", aspectRatio: 1 } as ImageStyle,
 
   badge: {
     position: "absolute",
-    bottom: 24,
-    right: 24,
+    bottom: 14,
+    right: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -509,6 +603,36 @@ const styles = StyleSheet.create<Styles>({
     color: THEME.primary,
     fontFamily: FONT.medium,
   },
+
+  counterPill: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(15,23,42,0.42)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  counterText: { color: "#fff", fontFamily: FONT.bold, fontSize: 12 },
+
+  dots: {
+    position: "absolute",
+    bottom: 14,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.55)",
+  },
+  dotActive: { backgroundColor: "#fff" },
 
   info: {
     backgroundColor: "#fff",
@@ -578,7 +702,6 @@ const styles = StyleSheet.create<Styles>({
   metaLabel: { fontSize: 12, color: THEME.gray[100], fontFamily: FONT.medium },
   metaValue: { fontSize: 13, color: THEME.dark[100], fontFamily: FONT.bold },
 
-  // ✅ owner card
   ownerCard: {
     backgroundColor: "rgba(15,23,42,0.03)",
     borderWidth: 1,
