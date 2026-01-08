@@ -1,6 +1,6 @@
 import type { Tables } from "database.types";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { Link, useRouter } from "expo-router";
+import { Link } from "expo-router";
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -19,82 +19,108 @@ type Props = {
   hrefBase?: "/(user)/home" | "/(admin)/home";
   onToggleFavorite?: (propertyId: string) => void;
   isFavorite?: boolean;
+  size?: "default" | "small" | "micro";
 };
-
-function SpecPill({
-  icon,
-  text,
-}: {
-  icon: React.ComponentProps<typeof FontAwesome>["name"];
-  text: string;
-}) {
-  return (
-    <View style={styles.specPill}>
-      <FontAwesome name={icon} size={12} color={THEME.dark[100]} />
-      <Text style={styles.specText} numberOfLines={1}>
-        {text}
-      </Text>
-    </View>
-  );
-}
-
-// src/components/PropertyCard.tsx
-// ✅ Replace Link href + stopPropagation on fav button
-
-// ... keep your imports (you can remove useRouter لأنه مش مستخدم)
 
 export default function PropertyCard({
   property,
   hrefBase = "/(user)/home",
   onToggleFavorite,
   isFavorite = false,
+  size = "default",
 }: Props) {
   const price = Number(property.price ?? 0);
   const priceText = Number.isFinite(price) ? price.toLocaleString("en-EG") : "0";
 
-  const currency = (() => {
+  const currency = useMemo(() => {
     const c = String(property.currency ?? "EGP").trim().toUpperCase();
     return c === "EGP" ? "جنيه" : c;
-  })();
+  }, [property.currency]);
 
   const city = property.city ?? "—";
   const image = (property.cover_image || null) as string | null;
 
+  const preset = size;
+  const isSmall = preset === "small";
+  const isMicro = preset === "micro";
+
+  const imageH = isMicro ? 118 : isSmall ? 155 : 195;
+
   return (
-    <View style={styles.card}>
-      {/* ✅ Correct route base */}
+    <View
+      style={[
+        styles.card,
+        isSmall && styles.cardSmall,
+        isMicro && styles.cardMicro,
+      ]}
+    >
       <Link href={`${hrefBase}/${property.id}`} asChild>
         <Pressable style={({ pressed }) => [styles.pressWrap, pressed && styles.pressed]}>
           <View style={styles.imageBox}>
             <RemoteImage
               path={image}
               fallback={defaultPropertyImage}
-              style={styles.image}
+              style={[styles.image, { height: imageH }]}
               resizeMode="cover"
             />
 
+            {/* ✅ Clean gradient (NO triangle look) */}
             <LinearGradient
-              colors={["transparent", "rgba(0,0,0,0.60)"]}
+              colors={[
+                "rgba(0,0,0,0.00)",
+                "rgba(0,0,0,0.08)",
+                "rgba(0,0,0,0.42)",
+              ]}
+              locations={[0, 0.65, 1]}
               start={{ x: 0.5, y: 0 }}
               end={{ x: 0.5, y: 1 }}
-              style={styles.gradient}
+              style={[
+                styles.gradient,
+                isSmall && styles.gradientSmall,
+                isMicro && styles.gradientMicro,
+              ]}
               pointerEvents="none"
             />
 
-            <View style={styles.pricePill} pointerEvents="none">
-              <Text style={styles.price}>{priceText}</Text>
-              <Text style={styles.currency}>{currency}</Text>
+            {/* ✅ Price chip (modern) */}
+            <View
+              style={[
+                styles.priceChip,
+                isSmall && styles.priceChipSmall,
+                isMicro && styles.priceChipMicro,
+              ]}
+              pointerEvents="none"
+            >
+              <Text
+                style={[
+                  styles.priceText,
+                  isSmall && styles.priceTextSmall,
+                  isMicro && styles.priceTextMicro,
+                ]}
+              >
+                {priceText}
+              </Text>
+              <Text
+                style={[
+                  styles.currencyText,
+                  isSmall && styles.currencyTextSmall,
+                  isMicro && styles.currencyTextMicro,
+                ]}
+              >
+                {currency}
+              </Text>
             </View>
 
-            {/* ✅ Favorite (prevent navigation) */}
+            {/* ✅ Favorite glass button */}
             <Pressable
               hitSlop={12}
               style={({ pressed }) => [
                 styles.favBtn,
-                pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+                isSmall && styles.favBtnSmall,
+                isMicro && styles.favBtnMicro,
+                pressed && styles.favPressed,
               ]}
               onPress={(e) => {
-                // ✅ stop parent press (Link)
                 // @ts-ignore
                 e?.stopPropagation?.();
                 onToggleFavorite?.(String(property.id));
@@ -102,19 +128,45 @@ export default function PropertyCard({
             >
               <FontAwesome
                 name={isFavorite ? "heart" : "heart-o"}
-                size={18}
-                color={isFavorite ? "#E11D48" : "#0B1220"}
+                size={isMicro ? 14 : isSmall ? 16 : 18}
+                color={isFavorite ? "#E11D48" : "rgba(11,18,32,0.92)"}
               />
             </Pressable>
 
-            <View style={styles.overlayContent} pointerEvents="none">
-              <Text numberOfLines={2} style={styles.title}>
+            {/* ✅ Bottom overlay: clean + readable */}
+            <View
+              style={[
+                styles.bottomOverlay,
+                isSmall && styles.bottomOverlaySmall,
+                isMicro && styles.bottomOverlayMicro,
+              ]}
+              pointerEvents="none"
+            >
+              <Text
+                numberOfLines={2}
+                style={[
+                  styles.title,
+                  isSmall && styles.titleSmall,
+                  isMicro && styles.titleMicro,
+                ]}
+              >
                 {property.title}
               </Text>
 
               <View style={styles.locationRow}>
-                <FontAwesome name="map-marker" size={12} color="#FFFFFF" />
-                <Text numberOfLines={1} style={styles.locationText}>
+                <FontAwesome
+                  name="map-marker"
+                  size={isMicro ? 10 : isSmall ? 11 : 12}
+                  color="rgba(255,255,255,0.92)"
+                />
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.locationText,
+                    isSmall && styles.locationTextSmall,
+                    isMicro && styles.locationTextMicro,
+                  ]}
+                >
                   {city}
                 </Text>
               </View>
@@ -126,132 +178,125 @@ export default function PropertyCard({
   );
 }
 
-
 const styles = StyleSheet.create({
+  /* ✅ Pro card shell */
   card: {
     width: "100%",
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#fff",
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.08)",
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
+
+    shadowColor: "#0B1220",
+    shadowOpacity: 0.06,
     shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 10 },
     elevation: 4,
   },
+  cardSmall: { borderRadius: 14, shadowOpacity: 0.055, shadowRadius: 12, elevation: 3 },
+  cardMicro: { borderRadius: 12, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
 
   pressWrap: { width: "100%" },
-  pressed: { opacity: 0.96, transform: [{ scale: 0.996 }] },
+  pressed: { opacity: 0.97, transform: [{ scale: 0.997 }] },
 
-  imageBox: {
-    position: "relative",
-    backgroundColor: THEME.white[100],
-  },
-  image: {
-    width: "100%",
-    height: 190,
-  },
+  imageBox: { position: "relative", backgroundColor: THEME.white[100] },
+  image: { width: "100%" },
+
+  /* ✅ gradient smaller + softer */
   gradient: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    height: 120,
+    height: 82,
   },
+  gradientSmall: { height: 72 },
+  gradientMicro: { height: 62 },
 
-  pricePill: {
+  /* ✅ Price chip */
+  priceChip: {
     position: "absolute",
-    top: 12,
-    left: 12,
+    top: 10,
+    left: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+
     backgroundColor: "rgba(255,255,255,0.96)",
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.10)",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
   },
-  price: {
-    fontSize: 12,
-    color: "#0B1220",
-    fontFamily: FONT.bold,
-  },
-  currency: {
-    fontSize: 10,
-    color: "rgba(11,18,32,0.60)",
-    fontFamily: FONT.medium,
-  },
+  priceChipSmall: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 11 },
+  priceChipMicro: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10 },
 
+  priceText: {
+    fontFamily: FONT.bold,
+    fontSize: 12.5,
+    color: "rgba(11,18,32,0.95)",
+  },
+  priceTextSmall: { fontSize: 11.5 },
+  priceTextMicro: { fontSize: 10.8 },
+
+  currencyText: {
+    fontFamily: FONT.medium,
+    fontSize: 10.3,
+    color: "rgba(11,18,32,0.60)",
+  },
+  currencyTextSmall: { fontSize: 9.7 },
+  currencyTextMicro: { fontSize: 9.2 },
+
+  /* ✅ Favorite glass */
   favBtn: {
     position: "absolute",
-    top: 12,
-    right: 12,
-    width: 38,
-    height: 38,
-    borderRadius: 999,
+    top: 10,
+    right: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.96)",
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.10)",
-    zIndex: 10,
   },
+  favBtnSmall: { width: 36, height: 36, borderRadius: 11 },
+  favBtnMicro: { width: 32, height: 32, borderRadius: 10 },
+  favPressed: { opacity: 0.86, transform: [{ scale: 0.98 }] },
 
-  overlayContent: {
+  /* ✅ Bottom overlay text area */
+  bottomOverlay: {
     position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 12,
+    left: 10,
+    right: 10,
+    bottom: 10,
     gap: 6,
   },
+  bottomOverlaySmall: { left: 10, right: 10, bottom: 9, gap: 5 },
+  bottomOverlayMicro: { left: 9, right: 9, bottom: 9, gap: 4 },
+
   title: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: "#FFFFFF",
     fontFamily: FONT.bold,
+    fontSize: 13.8,
+    lineHeight: 19,
+    color: "rgba(255,255,255,0.98)",
     textAlign: "right",
   },
-  locationRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 6,
-  },
+  titleSmall: { fontSize: 12.6, lineHeight: 18 },
+  titleMicro: { fontSize: 12.0, lineHeight: 17.2 },
+
+  locationRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
   locationText: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.92)",
-    fontFamily: FONT.medium,
-    textAlign: "right",
     flex: 1,
+    fontFamily: FONT.medium,
+    fontSize: 11.2,
+    color: "rgba(255,255,255,0.88)",
+    textAlign: "right",
   },
-
-  body: {
-    padding: 12,
-    paddingTop: 10,
-  },
-
-  specsRow: {
-    flexDirection: "row-reverse",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  specPill: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: "rgba(15,23,42,0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.06)",
-  },
-  specText: {
-    fontSize: 11,
-    color: THEME.dark[100],
-    fontFamily: FONT.bold,
-  },
+  locationTextSmall: { fontSize: 10.6 },
+  locationTextMicro: { fontSize: 10.2 },
 });

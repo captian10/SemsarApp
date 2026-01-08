@@ -2,7 +2,7 @@ import { Stack } from "expo-router";
 import { THEME } from "@constants/Colors";
 import { FONT } from "@/constants/Typography";
 
-export default function JobsStack() {
+export default function AdminJobsStack() {
   return (
     <Stack
       screenOptions={{
@@ -13,7 +13,6 @@ export default function JobsStack() {
           color: THEME.dark[100],
           fontSize: 18,
         },
-        headerShown: false,
         headerTitleAlign: "center",
         contentStyle: { backgroundColor: THEME.white[100] },
       }}
@@ -21,7 +20,21 @@ export default function JobsStack() {
       <Stack.Screen
         name="index"
         options={{
-          title: "وظائف",
+          title: "إدارة الوظائف",
+        }}
+      />
+
+      <Stack.Screen
+        name="create"
+        options={{
+          title: "إضافة وظيفة",
+        }}
+      />
+
+      <Stack.Screen
+        name="[id]"
+        options={{
+          title: "تفاصيل الوظيفة",
         }}
       />
     </Stack>

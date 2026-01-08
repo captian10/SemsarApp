@@ -98,35 +98,37 @@ export default function TabLayout() {
         options={{
           title: "",
           headerShown: false,
-          tabBarLabel: "",
-          tabBarItemStyle: { flex: 1 },
-          tabBarButton: (props) => (
+          tabBarLabel: () => null, // بدل "" عشان نتجنب أي text
+          tabBarButton: ({
+            accessibilityLabel,
+            accessibilityState,
+            testID,
+          }) => (
             <Pressable
-              ref={undefined as any}
-              {...props}
               onPress={() => router.push("/(user)/add")}
+              accessibilityLabel={accessibilityLabel}
+              accessibilityState={accessibilityState}
+              testID={testID}
+              hitSlop={12}
               style={({ pressed }) => ({
                 // top: -18,
                 alignSelf: "center",
-
-                width: 56, // كان 64
-                height: 56, // كان 64
-                borderRadius: 28, // كان 32
-
+                width: 56,
+                height: 56,
+                borderRadius: 28,
                 backgroundColor: THEME.primary,
                 alignItems: "center",
                 justifyContent: "center",
-                opacity: pressed ? 0.85 : 1,
+                opacity: pressed ? 0.9 : 1,
 
                 shadowColor: "#000",
-                shadowOpacity: 0.16, // شوية أقل
-                shadowRadius: 10, // شوية أقل
-                shadowOffset: { width: 0, height: 7 },
-                elevation: 9,
+                shadowOpacity: 0.15,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 6 },
+                elevation: 10,
               })}
-              hitSlop={10}
             >
-              <FontAwesome name="plus" size={22} color="#fff" /> {/* كان 26 */}
+              <FontAwesome name="plus" size={22} color="#fff" />
             </Pressable>
           ),
         }}

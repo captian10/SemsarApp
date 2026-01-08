@@ -122,22 +122,15 @@ function pickLatest(list: PropertyRow[], n = 12) {
   return [...list]
     .sort(
       (a: any, b: any) =>
-        new Date(b?.created_at ?? 0).getTime() - new Date(a?.created_at ?? 0).getTime()
+        new Date(b?.created_at ?? 0).getTime() -
+        new Date(a?.created_at ?? 0).getTime()
     )
     .slice(0, n);
 }
 
 function pickType(list: PropertyRow[], type: PropertyType, n = 12) {
   const t = normalize(type);
-  return list
-    .filter((p: any) => normalize(p?.property_type) === t)
-    .slice(0, n);
-}
-
-function pickPriceDesc(list: PropertyRow[], n = 12) {
-  return [...list]
-    .sort((a: any, b: any) => Number(b?.price ?? 0) - Number(a?.price ?? 0))
-    .slice(0, n);
+  return list.filter((p: any) => normalize(p?.property_type) === t).slice(0, n);
 }
 
 export default function HomeScreen() {
@@ -181,14 +174,12 @@ export default function HomeScreen() {
       const current = optimisticFav[id] ?? favoriteIds.has(id);
       const next = !current;
 
-      // optimistic UI
       setOptimisticFav((prev) => ({ ...prev, [id]: next }));
 
       toggleFav.mutate(
         { propertyId: id, next },
         {
           onError: (err: any) => {
-            // rollback
             setOptimisticFav((prev) => {
               const copy = { ...prev };
               delete copy[id];
@@ -197,7 +188,6 @@ export default function HomeScreen() {
             Alert.alert("خطأ", err?.message ?? "لم نستطع تحديث المفضلة");
           },
           onSettled: () => {
-            // let the server be the source of truth after invalidation
             setOptimisticFav((prev) => {
               const copy = { ...prev };
               delete copy[id];
@@ -250,12 +240,10 @@ export default function HomeScreen() {
     refetch();
   }, [refetch]);
 
-  // ✅ Rails data (Dubizzle style) - only when no filters
+  // ✅ Rails (no filters)
   const rails = useMemo(() => {
     const latest = pickLatest(list, 12);
-    const featured = pickPriceDesc(list, 12);
 
-    // choose 2-3 popular types (you can change)
     const t1 = PROPERTY_TYPES[0];
     const t2 = PROPERTY_TYPES[1];
     const t3 = PROPERTY_TYPES[2];
@@ -266,12 +254,6 @@ export default function HomeScreen() {
         title: "أحدث الإعلانات",
         items: latest,
         params: { title: "أحدث الإعلانات", sort: "latest" as Sort },
-      },
-      {
-        key: "featured",
-        title: "الأعلى سعرًا",
-        items: featured,
-        params: { title: "الأعلى سعرًا", sort: "price_desc" as Sort },
       },
       ...(t1
         ? [
@@ -399,12 +381,12 @@ export default function HomeScreen() {
             )}
           </View>
 
-          {/* ✅ Chips (type) */}
+          {/* Chips */}
           <FlatList
             data={["الكل", ...PROPERTY_TYPES] as FilterType[]}
             keyExtractor={(item) => String(item)}
             horizontal
-            inverted // ✅ RTL
+            inverted
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chipsRow}
             renderItem={({ item }) => (
@@ -435,10 +417,9 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       ) : filtersActive ? (
-        // ✅ when user is searching/filtering -> show grid
-        
+        /* Grid */
         <FlatList
-        key='grid-2'
+          key="grid-2"
           data={filtered}
           keyExtractor={(item, index) => String((item as any)?.id ?? index)}
           numColumns={2}
@@ -491,13 +472,13 @@ export default function HomeScreen() {
               </Pressable>
             </View>
           }
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-          ListFooterComponent={<View style={{ height: 20 }} />}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+          ListFooterComponent={<View style={{ height: 16 }} />}
         />
       ) : (
-        // ✅ Dubizzle mode (rails) when no filters
+        /* Rails */
         <FlatList
-        key='rails'
+          key="rails"
           data={rails}
           keyExtractor={(s) => s.key}
           showsVerticalScrollIndicator={false}
@@ -508,25 +489,30 @@ export default function HomeScreen() {
               tintColor={THEME.primary}
             />
           }
-          contentContainerStyle={{ paddingBottom: 16 }}
-          renderItem={({ item }) => (
-            <View style={{ marginBottom: 16 }}>
-              <HomeSectionRail
-                title={item.title}
-                data={item.items as any}
-                hrefBase="/(user)/home"
-                isFavorite={(id) => isFav(id)}
-                onToggleFavorite={onToggleFavorite}
-                onPressSeeAll={() =>
-                  router.push({
-                    pathname: "/(user)/home/see-all",
-                    params: item.params as any,
-                  })
-                }
-              />
-            </View>
-          )}
-          ListFooterComponent={<View style={{ height: 12 }} />}
+          contentContainerStyle={{ paddingBottom: 14 }}
+          renderItem={({ item }) => {
+            const isLatest = item.key === "latest";
+
+            return (
+              <View style={{ marginBottom: isLatest ? 8 : 12 }}>
+                <HomeSectionRail
+                  title={item.title}
+                  variant={isLatest ? "micro" : "compact"} // ✅ latest أصغر بكتير + الباقي نفس ستايلها
+                  data={item.items as any}
+                  hrefBase="/(user)/home"
+                  isFavorite={(id) => isFav(id)}
+                  onToggleFavorite={onToggleFavorite}
+                  onPressSeeAll={() =>
+                    router.push({
+                      pathname: "/(user)/home/see-all",
+                      params: item.params as any,
+                    })
+                  }
+                />
+              </View>
+            );
+          }}
+          ListFooterComponent={<View style={{ height: 10 }} />}
         />
       )}
 
@@ -649,7 +635,7 @@ function RadioRow({
       </View>
 
       <View style={[styles.radioDot, active && styles.radioDotActive]}>
-        {active && <View style={styles.radioDotInner} />}
+        {active ? <View style={styles.radioDotInner} /> : null}
       </View>
     </Pressable>
   );
@@ -657,7 +643,8 @@ function RadioRow({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: THEME.white[100] },
-  topBar: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 },
+
+  topBar: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8 },
 
   searchCard: {
     backgroundColor: "#fff",
@@ -666,37 +653,39 @@ const styles = StyleSheet.create({
     borderColor: "rgba(15,23,42,0.06)",
     padding: 10,
     shadowColor: "#0F172A",
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.045,
     shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 10 },
     elevation: 1,
   },
 
-  searchRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
+  searchRow: { flexDirection: "row-reverse", alignItems: "center" },
 
   searchWrap: {
     flex: 1,
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 10,
     paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.08)",
     backgroundColor: "rgba(15,23,42,0.03)",
   },
+
   searchInput: {
     flex: 1,
     fontFamily: FONT.medium,
-    fontSize: 13,
+    fontSize: 12.5,
     color: THEME.dark[100],
     textAlign: "right",
     paddingVertical: 0,
+    marginLeft: 8,
   },
+
   searchPlaceholder: {
     fontFamily: FONT.medium,
-    fontSize: 13,
+    fontSize: 12.5,
     color: "rgba(15,23,42,0.35)",
     textAlign: "right",
     flex: 1,
@@ -709,77 +698,92 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(15,23,42,0.06)",
+    marginRight: 8,
   },
 
   filterBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.10)",
+    marginLeft: 10,
   },
+
   filterBtnActive: {
     backgroundColor: THEME.primary,
     borderColor: THEME.primary,
   },
 
   metaRow: {
-    marginTop: 10,
+    marginTop: 8,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
   },
+
   metaText: {
     flex: 1,
     fontFamily: FONT.medium,
-    fontSize: 12,
+    fontSize: 11.5,
     color: "rgba(15,23,42,0.60)",
     textAlign: "right",
   },
+
   resetPill: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 999,
     backgroundColor: "rgba(59,130,246,0.08)",
     borderWidth: 1,
     borderColor: "rgba(59,130,246,0.18)",
   },
-  resetPillText: { fontFamily: FONT.bold, fontSize: 12, color: THEME.primary },
 
-  /* ✅ Chips */
-  chipsRow: {
-    marginTop: 10,
-    paddingBottom: 2,
-    gap: 8,
+  resetPillText: {
+    fontFamily: FONT.bold,
+    fontSize: 11.5,
+    color: THEME.primary,
+    marginRight: 6,
   },
+
+  chipsRow: {
+    marginTop: 8,
+    paddingBottom: 2,
+    paddingRight: 2,
+    paddingLeft: 2,
+  },
+
   chip: {
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.10)",
     backgroundColor: "rgba(15,23,42,0.03)",
+    marginLeft: 8,
   },
+
   chipActive: {
     backgroundColor: "rgba(59,130,246,0.10)",
     borderColor: "rgba(59,130,246,0.35)",
   },
+
   chipText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontFamily: FONT.bold,
     color: THEME.dark[100],
   },
+
   chipTextActive: { color: THEME.primary },
 
-  content: { paddingHorizontal: 12, paddingTop: 6, paddingBottom: 24 },
+  content: { paddingHorizontal: 12, paddingTop: 6, paddingBottom: 18 },
   contentEmpty: { flexGrow: 1, justifyContent: "center" },
+
   row: { justifyContent: "space-between" },
   col: { flex: 1, maxWidth: "50%", paddingHorizontal: 6 },
 
@@ -787,75 +791,85 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     marginTop: 12,
     backgroundColor: "#fff",
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.06)",
     padding: 16,
     alignItems: "center",
-    gap: 8,
   },
+
   stateTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: FONT.bold,
     color: THEME.dark[100],
     textAlign: "center",
+    marginTop: 8,
   },
+
   stateText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontFamily: FONT.regular,
     color: THEME.gray[100],
     textAlign: "center",
+    marginTop: 4,
   },
 
-  errorIcon: { fontSize: 22 },
+  errorIcon: { fontSize: 20 },
   errorTitle: {
-    fontSize: 15,
+    fontSize: 13.5,
     fontFamily: FONT.bold,
     color: THEME.error,
     textAlign: "center",
+    marginTop: 6,
   },
 
   primaryBtn: {
-    marginTop: 6,
+    marginTop: 10,
     backgroundColor: THEME.primary,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderRadius: 14,
     alignItems: "center",
     width: "100%",
   },
+
   primaryBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 13 },
 
   pressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
 
-  emptyWrap: { alignItems: "center", paddingHorizontal: 16, gap: 8 },
+  emptyWrap: { alignItems: "center", paddingHorizontal: 16 },
   emptyIconWrap: {
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(59,130,246,0.08)",
     borderWidth: 1,
     borderColor: "rgba(59,130,246,0.18)",
+    marginBottom: 8,
   },
+
   emptyTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: FONT.bold,
     color: THEME.dark[100],
     textAlign: "center",
+    marginBottom: 6,
   },
+
   emptySub: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: FONT.regular,
     color: THEME.gray[100],
     textAlign: "center",
     lineHeight: 18,
   },
+
   ghostBtn: {
     marginTop: 10,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(59,130,246,0.22)",
@@ -863,34 +877,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
     minWidth: 160,
   },
+
   ghostBtnText: { color: THEME.primary, fontFamily: FONT.bold, fontSize: 13 },
 
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(15,23,42,0.45)",
   },
+
   sheet: {
     position: "absolute",
     left: 12,
     right: 12,
     bottom: 12,
     backgroundColor: "#fff",
-    borderRadius: 22,
+    borderRadius: 20,
     padding: 14,
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.08)",
   },
+
   sheetHeader: {
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 10,
   },
+
   sheetTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: FONT.bold,
     color: THEME.dark[100],
   },
+
   sheetClose: {
     width: 34,
     height: 34,
@@ -899,39 +918,45 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(15,23,42,0.06)",
   },
+
   sectionTitle: {
     marginTop: 8,
     marginBottom: 8,
-    fontSize: 12,
+    fontSize: 11.5,
     fontFamily: FONT.bold,
     color: "rgba(15,23,42,0.70)",
     textAlign: "right",
   },
 
-  radioWrap: { gap: 8 },
+  radioWrap: {},
+
   radioRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.10)",
     backgroundColor: "rgba(15,23,42,0.03)",
+    marginBottom: 8,
   },
+
   radioRowActive: {
     backgroundColor: "rgba(59,130,246,0.10)",
     borderColor: "rgba(59,130,246,0.35)",
   },
+
   radioRight: { flex: 1, alignItems: "flex-end" },
+
   radioText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontFamily: FONT.bold,
     color: THEME.dark[100],
     textAlign: "right",
   },
+
   radioTextActive: { color: THEME.primary },
 
   radioDot: {
@@ -943,8 +968,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#fff",
+    marginLeft: 10,
   },
+
   radioDotActive: { borderColor: THEME.primary },
+
   radioDotInner: {
     width: 9,
     height: 9,
@@ -954,9 +982,9 @@ const styles = StyleSheet.create({
 
   sheetFooter: {
     flexDirection: "row-reverse",
-    gap: 10,
-    marginTop: 14,
+    marginTop: 10,
   },
+
   sheetGhost: {
     flex: 1,
     paddingVertical: 12,
@@ -965,12 +993,15 @@ const styles = StyleSheet.create({
     borderColor: "rgba(15,23,42,0.10)",
     backgroundColor: "rgba(15,23,42,0.03)",
     alignItems: "center",
+    marginLeft: 10,
   },
+
   sheetGhostText: {
     fontSize: 13,
     fontFamily: FONT.bold,
     color: THEME.dark[100],
   },
+
   sheetPrimary: {
     flex: 1,
     paddingVertical: 12,
@@ -978,6 +1009,7 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.primary,
     alignItems: "center",
   },
+
   sheetPrimaryText: {
     fontSize: 13,
     fontFamily: FONT.bold,

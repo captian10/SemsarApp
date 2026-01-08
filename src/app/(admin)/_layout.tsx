@@ -7,6 +7,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FONT } from "@/constants/Typography";
 import { THEME } from "@constants/Colors";
 import { useAuth } from "@providers/AuthProvider";
+
+// ✅ لو لسه عندك Hook للـ requests خليه زي ما هو (مش هيأثر على jobs)
+// لو عملت Hook جديد للوظائف غيّر الاستيراد هنا
 import { useAdminOpenRequestFromPush } from "@/lib/useAdminOpenRequestFromPush";
 
 function TabBarIcon(props: {
@@ -20,7 +23,7 @@ export default function TabLayout() {
   const { isAdmin } = useAuth();
   const insets = useSafeAreaInsets();
 
-  // ✅ فتح صفحة الطلب (Request) عند الضغط على إشعار
+  // ✅ فتح صفحة (لو عندك إشعارات للطلبات/الوظائف)
   useAdminOpenRequestFromPush();
 
   // ✅ لو مش Admin رجّعه لليوزر
@@ -52,7 +55,7 @@ export default function TabLayout() {
         ],
       }}
     >
-      {/* hide / (admin)/index */}
+      {/* hide /(admin)/index */}
       <Tabs.Screen name="index" options={{ href: null }} />
 
       <Tabs.Screen
@@ -63,12 +66,13 @@ export default function TabLayout() {
         }}
       />
 
+      {/* ✅ بدل requests -> jobs */}
       <Tabs.Screen
-        name="requests"
+        name="jobs"
         options={{
-          title: "التقديمات",
+          title: "الوظائف",
           tabBarIcon: ({ color }) => (
-            <TabBarIcon name="file-text" color={color} />
+            <TabBarIcon name="briefcase" color={color} />
           ),
         }}
       />

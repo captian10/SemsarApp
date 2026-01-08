@@ -1,92 +1,156 @@
-import { useOrderDetails } from "@api/favorites";
-import { useUpdateOrderSubscription } from "@api/requests/subscription";
-import OrderItemListItem from "@components/RequestItemListItem";
-import OrderListItem from "@components/RequestListItem";
-import { Stack, useLocalSearchParams } from "expo-router";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo } from "react";
 import {
   ActivityIndicator,
-  FlatList,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 
 import { FONT } from "@/constants/Typography";
+import { useJob } from "@api/jobs";
 import { THEME } from "@constants/Colors";
 
-export default function OrderDetailsScreen() {
-  const params = useLocalSearchParams();
+function formatDate(iso?: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("ar-EG", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
 
-  // ✅ safer parsing for id
-  const id = useMemo(() => {
-    const raw = Array.isArray(params?.id) ? params.id[0] : params?.id;
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : 0;
-  }, [params?.id]);
+export default function JobDetailsScreen() {
+  const router = useRouter(); // ✅ still used for refresh route stack etc.
+  const { id } = useLocalSearchParams<{ id: string }>();
 
-  const { data: order, isLoading, error } = useOrderDetails(id);
+  const { data: job, isLoading, error, refetch } = useJob(id);
 
-  // ✅ keep hook call stable (make sure your hook handles id=0 safely)
-  useUpdateOrderSubscription(id);
+  const meta = useMemo(() => {
+    const parts = [job?.company, job?.location].filter(Boolean) as string[];
+    return parts.join(" • ");
+  }, [job?.company, job?.location]);
 
-  if (!id) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.centerTitle}>رقم طلب غير صالح</Text>
-        <Text style={styles.centerSub}>ارجع وحاول تفتح الطلب مرة تانية</Text>
-      </View>
-    );
-  }
+  const openWhatsApp = async () => {
+    const phone = "201012433451";
+    const msg = `السلام عليكم، اريد التقديم على وظيفة: ${
+      job?.title ?? ""
+    } (رقم: ${id})`;
+    const encoded = encodeURIComponent(msg);
+
+    const webUrl = `https://wa.me/${phone}?text=${encoded}`;
+    const appUrl =
+      Platform.OS === "ios"
+        ? webUrl
+        : `whatsapp://send?phone=${phone}&text=${encoded}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(appUrl);
+      await Linking.openURL(canOpen ? appUrl : webUrl);
+    } catch {
+      await Linking.openURL(webUrl);
+    }
+  };
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={THEME.primary} />
-        <Text style={styles.centerTitle}>جاري تحميل الطلب…</Text>
-        <Text style={styles.centerSub}>لحظة واحدة</Text>
+      <View style={styles.screen}>
+        <Stack.Screen options={{ title: "تفاصيل الوظيفة" }} />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={THEME.primary} />
+          <Text style={styles.muted}>جاري التحميل…</Text>
+        </View>
       </View>
     );
   }
 
-  if (error || !order) {
+  if (error || !job) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.centerTitle}>فشل في جلب بيانات الطلب</Text>
-        <Text style={styles.centerSub}>تأكد من الاتصال وحاول مرة أخرى</Text>
+      <View style={styles.screen}>
+        <Stack.Screen options={{ title: "تفاصيل الوظيفة" }} />
+        <View style={styles.center}>
+          <Text style={styles.title}>مش لاقيين الوظيفة</Text>
+          <Text style={styles.muted}>ممكن تكون اتحذفت أو مش متاحة حالياً.</Text>
+
+          <Pressable
+            onPress={() => refetch()}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              pressed && { opacity: 0.9 },
+            ]}
+          >
+            <Text style={styles.primaryBtnText}>تحديث</Text>
+          </Pressable>
+
+          {/* ✅ removed رجوع button */}
+        </View>
       </View>
     );
   }
-
-  const items = Array.isArray((order as any)?.order_items)
-    ? ((order as any).order_items as any[])
-    : [];
 
   return (
     <View style={styles.screen}>
       <Stack.Screen
-        options={{
-          title: `طلب #${id}`,
-          headerTitleStyle: {
-            fontFamily: FONT.bold,
-            fontSize: 16,
-          },
-        }}
+        options={{ title: "تفاصيل الوظيفة", headerTitleAlign: "center" }}
       />
 
-      <FlatList
-        data={items}
-        keyExtractor={(item: any, idx) => String(item?.id ?? idx)}
-        renderItem={({ item }) => <OrderItemListItem item={item} />}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={() => <OrderListItem order={order as any} />}
-        ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>لا توجد عناصر في هذا الطلب</Text>
-          </View>
-        }
+      <ScrollView
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-      />
+      >
+        <View style={styles.card}>
+          <Text style={styles.jobTitle}>{job.title}</Text>
+
+          {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+
+          <View style={styles.badgesRow}>
+            {job.salary ? (
+              <View style={styles.badge}>
+                <FontAwesome name="money" size={14} color={THEME.primary} />
+                <Text style={styles.badgeText}>{job.salary}</Text>
+              </View>
+            ) : null}
+
+            {job.created_at ? (
+              <View style={styles.badge}>
+                <FontAwesome name="calendar" size={14} color={THEME.primary} />
+                <Text style={styles.badgeText}>
+                  {formatDate(job.created_at)}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {job.description ? (
+            <>
+              <Text style={styles.sectionTitle}>الوصف</Text>
+              <Text style={styles.desc}>{job.description}</Text>
+            </>
+          ) : (
+            <Text style={styles.muted}>لا يوجد وصف.</Text>
+          )}
+        </View>
+
+        <Pressable
+          onPress={openWhatsApp}
+          style={({ pressed }) => [
+            styles.whatsappBtn,
+            pressed && { opacity: 0.92 },
+          ]}
+        >
+          <FontAwesome name="whatsapp" size={20} color="#fff" />
+          <Text style={styles.whatsappText}>تواصل واتساب للتقديم</Text>
+        </Pressable>
+
+        {/* ✅ removed رجوع button at bottom */}
+      </ScrollView>
     </View>
   );
 }
@@ -94,40 +158,118 @@ export default function OrderDetailsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    padding: 12,
     backgroundColor: THEME.white[100],
   },
-  listContent: {
-    gap: 10,
-    paddingBottom: 16,
+  content: {
+    padding: 12,
+    paddingBottom: 18,
   },
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    padding: 16,
-    backgroundColor: THEME.white[100],
+    gap: 10,
+    paddingHorizontal: 16,
   },
-  centerTitle: {
+  title: {
     fontFamily: FONT.bold,
-    fontSize: 14,
+    fontSize: 18,
     color: THEME.dark[100],
     textAlign: "center",
   },
-  centerSub: {
+  muted: {
     fontFamily: FONT.regular,
-    fontSize: 12,
+    fontSize: 13,
     color: THEME.gray[100],
     textAlign: "center",
+    lineHeight: 18,
   },
-  emptyBox: {
-    paddingVertical: 20,
+
+  card: {
+    backgroundColor: THEME.white.DEFAULT,
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.08)",
+    borderRadius: 16,
+    padding: 14,
+  },
+  jobTitle: {
+    fontFamily: FONT.bold,
+    fontSize: 18,
+    color: THEME.dark[100],
+    textAlign: "right",
+    marginBottom: 6,
+  },
+  meta: {
+    fontFamily: FONT.regular,
+    fontSize: 13,
+    color: THEME.gray[100],
+    textAlign: "right",
+    marginBottom: 10,
+  },
+  badgesRow: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12,
+  },
+  badge: {
+    flexDirection: "row-reverse",
     alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: "#F2F7FF",
   },
-  emptyText: {
+  badgeText: {
     fontFamily: FONT.medium,
-    color: THEME.gray[100],
-    textAlign: "center",
+    fontSize: 12,
+    color: THEME.dark[100],
+  },
+  sectionTitle: {
+    fontFamily: FONT.bold,
+    fontSize: 14,
+    color: THEME.dark[100],
+    textAlign: "right",
+    marginBottom: 6,
+  },
+  desc: {
+    fontFamily: FONT.regular,
+    fontSize: 13,
+    color: THEME.dark[100],
+    textAlign: "right",
+    lineHeight: 20,
+  },
+
+  whatsappBtn: {
+    marginTop: 12,
+    backgroundColor: "#25D366",
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  whatsappText: {
+    fontFamily: FONT.bold,
+    fontSize: 14,
+    color: "#fff",
+  },
+
+  primaryBtn: {
+    marginTop: 6,
+    alignSelf: "stretch",
+    backgroundColor: THEME.primary,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryBtnText: {
+    color: "#fff",
+    fontFamily: FONT.bold,
+    fontSize: 14,
   },
 });

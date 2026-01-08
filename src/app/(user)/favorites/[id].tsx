@@ -1,5 +1,5 @@
 import { useOrderDetails } from "@api/favorites";
-import { useUpdateOrderSubscription } from "@api/requests/subscription";
+import { useUpdateOrderSubscription } from "@api/jobs/subscription";
 import OrderItemListItem from "@components/RequestItemListItem";
 import OrderListItem from "@components/RequestListItem";
 import { Stack, useLocalSearchParams } from "expo-router";
