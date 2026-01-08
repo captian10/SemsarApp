@@ -26,6 +26,8 @@ export default function HomeStack() {
           title: "الصفحة الرئيسية",
         }}
       />
+            <Stack.Screen name="see-all" options={{ title: "عرض الكل" }} />
+
     </Stack>
   );
 }

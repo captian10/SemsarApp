@@ -1,4 +1,4 @@
-import type { Tables } from "@database.types";
+import type { Tables } from "database.types";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Link, useRouter } from "expo-router";
 import React, { useMemo } from "react";
@@ -38,110 +38,94 @@ function SpecPill({
   );
 }
 
+// src/components/PropertyCard.tsx
+// ✅ Replace Link href + stopPropagation on fav button
+
+// ... keep your imports (you can remove useRouter لأنه مش مستخدم)
+
 export default function PropertyCard({
   property,
   hrefBase = "/(user)/home",
   onToggleFavorite,
   isFavorite = false,
 }: Props) {
-  const router = useRouter();
-
   const price = Number(property.price ?? 0);
   const priceText = Number.isFinite(price) ? price.toLocaleString("en-EG") : "0";
 
-const currency = (() => {
-  const c = String(property.currency ?? "EGP").trim().toUpperCase();
-  return c === "EGP" ? "جنيه" : c;
-})();
+  const currency = (() => {
+    const c = String(property.currency ?? "EGP").trim().toUpperCase();
+    return c === "EGP" ? "جنيه" : c;
+  })();
+
   const city = property.city ?? "—";
   const image = (property.cover_image || null) as string | null;
 
-  const specs = useMemo(() => {
-    const out: Array<{ icon: any; text: string }> = [];
-    if (property.bedrooms != null)
-      out.push({ icon: "bed", text: `${property.bedrooms} غرف` });
-    if (property.bathrooms != null)
-      out.push({ icon: "bath", text: `${property.bathrooms} حمام` });
-    if (property.area_sqm != null)
-      out.push({ icon: "arrows-alt", text: `${property.area_sqm} م²` });
-    return out;
-  }, [property.bedrooms, property.bathrooms, property.area_sqm]);
-
-
   return (
     <View style={styles.card}>
-      {/* ✅ Whole card navigates */}
-      <Link href={`/home/${property.id}`} asChild>
-      <Pressable
-        style={({ pressed }) => [styles.pressWrap, pressed && styles.pressed]}
-      >
-        {/* IMAGE */}
-        <View style={styles.imageBox}>
-          <RemoteImage
-            path={image}
-            fallback={defaultPropertyImage}
-            style={styles.image}
-            resizeMode="cover"
-          />
-
-          <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.60)"]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={styles.gradient}
-            pointerEvents="none"
-          />
-
-          {/* Price pill */}
-          <View style={styles.pricePill} pointerEvents="none">
-            <Text style={styles.price}>{priceText}</Text>
-            <Text style={styles.currency}>{currency}</Text>
-          </View>
-
-          {/* ✅ Favorite (no navigation) */}
-          <Pressable
-            hitSlop={12}
-            style={({ pressed }) => [
-              styles.favBtn,
-              pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
-            ]}
-            onPress={() => onToggleFavorite?.(String(property.id))}
-          >
-            <FontAwesome
-              name={isFavorite ? "heart" : "heart-o"}
-              size={18}
-              color={isFavorite ? "#E11D48" : "#0B1220"}
+      {/* ✅ Correct route base */}
+      <Link href={`${hrefBase}/${property.id}`} asChild>
+        <Pressable style={({ pressed }) => [styles.pressWrap, pressed && styles.pressed]}>
+          <View style={styles.imageBox}>
+            <RemoteImage
+              path={image}
+              fallback={defaultPropertyImage}
+              style={styles.image}
+              resizeMode="cover"
             />
-          </Pressable>
 
-          {/* Bottom overlay content */}
-          <View style={styles.overlayContent} pointerEvents="none">
-            <Text numberOfLines={2} style={styles.title}>
-              {property.title}
-            </Text>
+            <LinearGradient
+              colors={["transparent", "rgba(0,0,0,0.60)"]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={styles.gradient}
+              pointerEvents="none"
+            />
 
-            <View style={styles.locationRow}>
-              <FontAwesome name="map-marker" size={12} color="#FFFFFF" />
-              <Text numberOfLines={1} style={styles.locationText}>
-                {city}
+            <View style={styles.pricePill} pointerEvents="none">
+              <Text style={styles.price}>{priceText}</Text>
+              <Text style={styles.currency}>{currency}</Text>
+            </View>
+
+            {/* ✅ Favorite (prevent navigation) */}
+            <Pressable
+              hitSlop={12}
+              style={({ pressed }) => [
+                styles.favBtn,
+                pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+              ]}
+              onPress={(e) => {
+                // ✅ stop parent press (Link)
+                // @ts-ignore
+                e?.stopPropagation?.();
+                onToggleFavorite?.(String(property.id));
+              }}
+            >
+              <FontAwesome
+                name={isFavorite ? "heart" : "heart-o"}
+                size={18}
+                color={isFavorite ? "#E11D48" : "#0B1220"}
+              />
+            </Pressable>
+
+            <View style={styles.overlayContent} pointerEvents="none">
+              <Text numberOfLines={2} style={styles.title}>
+                {property.title}
               </Text>
+
+              <View style={styles.locationRow}>
+                <FontAwesome name="map-marker" size={12} color="#FFFFFF" />
+                <Text numberOfLines={1} style={styles.locationText}>
+                  {city}
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
-
-        {/* BODY (اختياري) */}
-        {/* <View style={styles.body}>
-          <View style={styles.specsRow}>
-            {specs.map((s, idx) => (
-              <SpecPill key={idx} icon={s.icon} text={s.text} />
-            ))}
-          </View>
-        </View> */}
-      </Pressable>
+        </Pressable>
       </Link>
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   card: {

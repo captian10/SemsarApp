@@ -1,7 +1,7 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Tabs, useRouter } from "expo-router";
 import React, { useEffect, useRef } from "react";
-import { Platform } from "react-native";
+import { Platform, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FONT } from "@/constants/Typography";
@@ -13,7 +13,8 @@ function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>["name"];
   color: string;
 }) {
-  return <FontAwesome size={20} style={{ marginBottom: -2 }} {...props} />;
+  // ✅ أكبر شوية + مسافة لطيفة تحت
+  return <FontAwesome size={22} style={{ marginBottom: 2 }} {...props} />;
 }
 
 export default function TabLayout() {
@@ -31,15 +32,15 @@ export default function TabLayout() {
       return;
     }
 
-    if (session) {
-      didRedirect.current = false;
-    }
+    if (session) didRedirect.current = false;
   }, [loading, session?.user?.id, router]);
 
   if (loading || !session) return null;
 
   const bottomPad = Math.max(insets.bottom, Platform.OS === "android" ? 10 : 0);
-  const tabHeight = 56 + bottomPad;
+
+  // ✅ أعلى شوية عشان يبقى مريح
+  const tabHeight = 66 + bottomPad;
 
   return (
     <Tabs
@@ -47,6 +48,13 @@ export default function TabLayout() {
         headerShown: useClientOnlyValue(false, true),
         tabBarActiveTintColor: THEME.primary,
         tabBarInactiveTintColor: THEME.gray[100],
+
+        // ✅ توزيع متساوي + hit area أحسن
+        tabBarItemStyle: {
+          flex: 1,
+          paddingVertical: 6,
+        },
+
         tabBarStyle: {
           backgroundColor: THEME.white.DEFAULT,
           borderTopColor: "#EDEDED",
@@ -55,19 +63,21 @@ export default function TabLayout() {
           paddingBottom: bottomPad,
           paddingTop: 8,
         },
+
+        // ✅ ليبل أوضح
         tabBarLabelStyle: {
           fontFamily: FONT.medium,
-          fontSize: 11,
+          fontSize: 12,
+          marginTop: 2,
         },
       }}
     >
-      {/* hide group index route */}
       <Tabs.Screen name="index" options={{ href: null }} />
 
       <Tabs.Screen
         name="home"
         options={{
-          title: "الصفحة الرئيسية",
+          title: "الرئيسية",
           headerShown: false,
           tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
         }}
@@ -82,13 +92,53 @@ export default function TabLayout() {
         }}
       />
 
+      {/* ✅ Middle Add */}
       <Tabs.Screen
-        name="requests"
+        name="add"
         options={{
-          title: "التقديمات",
+          title: "",
+          headerShown: false,
+          tabBarLabel: "",
+          tabBarItemStyle: { flex: 1 },
+          tabBarButton: (props) => (
+            <Pressable
+              ref={undefined as any}
+              {...props}
+              onPress={() => router.push("/(user)/add")}
+              style={({ pressed }) => ({
+                // top: -18,
+                alignSelf: "center",
+
+                width: 56, // كان 64
+                height: 56, // كان 64
+                borderRadius: 28, // كان 32
+
+                backgroundColor: THEME.primary,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: pressed ? 0.85 : 1,
+
+                shadowColor: "#000",
+                shadowOpacity: 0.16, // شوية أقل
+                shadowRadius: 10, // شوية أقل
+                shadowOffset: { width: 0, height: 7 },
+                elevation: 9,
+              })}
+              hitSlop={10}
+            >
+              <FontAwesome name="plus" size={22} color="#fff" /> {/* كان 26 */}
+            </Pressable>
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="jobs"
+        options={{
+          title: "وظائف",
           headerShown: false,
           tabBarIcon: ({ color }) => (
-            <TabBarIcon name="file-text" color={color} />
+            <TabBarIcon name="briefcase" color={color} />
           ),
         }}
       />

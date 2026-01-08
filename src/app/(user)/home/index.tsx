@@ -5,8 +5,10 @@ import {
   type PropertyRow,
 } from "@api/properties";
 import PropertyCard from "@components/PropertyCard";
+import HomeSectionRail from "@/components/HomeSectionRail";
 import { THEME } from "@constants/Colors";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -114,7 +116,32 @@ function TypeChip({
   );
 }
 
+/* ----------------- helpers: pick rails ----------------- */
+
+function pickLatest(list: PropertyRow[], n = 12) {
+  return [...list]
+    .sort(
+      (a: any, b: any) =>
+        new Date(b?.created_at ?? 0).getTime() - new Date(a?.created_at ?? 0).getTime()
+    )
+    .slice(0, n);
+}
+
+function pickType(list: PropertyRow[], type: PropertyType, n = 12) {
+  const t = normalize(type);
+  return list
+    .filter((p: any) => normalize(p?.property_type) === t)
+    .slice(0, n);
+}
+
+function pickPriceDesc(list: PropertyRow[], n = 12) {
+  return [...list]
+    .sort((a: any, b: any) => Number(b?.price ?? 0) - Number(a?.price ?? 0))
+    .slice(0, n);
+}
+
 export default function HomeScreen() {
+  const router = useRouter();
   const { data, error, isLoading, isFetching, refetch } = usePropertyList();
 
   // ✅ favorites
@@ -222,6 +249,62 @@ export default function HomeScreen() {
   const onRefresh = useCallback(() => {
     refetch();
   }, [refetch]);
+
+  // ✅ Rails data (Dubizzle style) - only when no filters
+  const rails = useMemo(() => {
+    const latest = pickLatest(list, 12);
+    const featured = pickPriceDesc(list, 12);
+
+    // choose 2-3 popular types (you can change)
+    const t1 = PROPERTY_TYPES[0];
+    const t2 = PROPERTY_TYPES[1];
+    const t3 = PROPERTY_TYPES[2];
+
+    return [
+      {
+        key: "latest",
+        title: "أحدث الإعلانات",
+        items: latest,
+        params: { title: "أحدث الإعلانات", sort: "latest" as Sort },
+      },
+      {
+        key: "featured",
+        title: "الأعلى سعرًا",
+        items: featured,
+        params: { title: "الأعلى سعرًا", sort: "price_desc" as Sort },
+      },
+      ...(t1
+        ? [
+            {
+              key: `type-${t1}`,
+              title: t1,
+              items: pickType(list, t1, 12),
+              params: { title: t1, type: t1, sort: "latest" as Sort },
+            },
+          ]
+        : []),
+      ...(t2
+        ? [
+            {
+              key: `type-${t2}`,
+              title: t2,
+              items: pickType(list, t2, 12),
+              params: { title: t2, type: t2, sort: "latest" as Sort },
+            },
+          ]
+        : []),
+      ...(t3
+        ? [
+            {
+              key: `type-${t3}`,
+              title: t3,
+              items: pickType(list, t3, 12),
+              params: { title: t3, type: t3, sort: "latest" as Sort },
+            },
+          ]
+        : []),
+    ].filter((s) => s.items && s.items.length);
+  }, [list]);
 
   if (isLoading) {
     return (
@@ -351,8 +434,11 @@ export default function HomeScreen() {
             <Text style={styles.primaryBtnText}>إعادة المحاولة</Text>
           </Pressable>
         </View>
-      ) : (
+      ) : filtersActive ? (
+        // ✅ when user is searching/filtering -> show grid
+        
         <FlatList
+        key='grid-2'
           data={filtered}
           keyExtractor={(item, index) => String((item as any)?.id ?? index)}
           numColumns={2}
@@ -407,6 +493,40 @@ export default function HomeScreen() {
           }
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
           ListFooterComponent={<View style={{ height: 20 }} />}
+        />
+      ) : (
+        // ✅ Dubizzle mode (rails) when no filters
+        <FlatList
+        key='rails'
+          data={rails}
+          keyExtractor={(s) => s.key}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={!!isFetching}
+              onRefresh={onRefresh}
+              tintColor={THEME.primary}
+            />
+          }
+          contentContainerStyle={{ paddingBottom: 16 }}
+          renderItem={({ item }) => (
+            <View style={{ marginBottom: 16 }}>
+              <HomeSectionRail
+                title={item.title}
+                data={item.items as any}
+                hrefBase="/(user)/home"
+                isFavorite={(id) => isFav(id)}
+                onToggleFavorite={onToggleFavorite}
+                onPressSeeAll={() =>
+                  router.push({
+                    pathname: "/(user)/home/see-all",
+                    params: item.params as any,
+                  })
+                }
+              />
+            </View>
+          )}
+          ListFooterComponent={<View style={{ height: 12 }} />}
         />
       )}
 

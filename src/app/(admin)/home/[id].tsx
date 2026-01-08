@@ -118,7 +118,9 @@ export default function AdminPropertyDetailsScreen() {
   }, [property?.price]);
 
   const currencyText = useMemo(() => {
-    const c = String(property?.currency ?? "EGP").trim().toUpperCase();
+    const c = String(property?.currency ?? "EGP")
+      .trim()
+      .toUpperCase();
     if (c === "EGP") return "جنيه";
     return c;
   }, [property?.currency]);
@@ -158,7 +160,10 @@ export default function AdminPropertyDetailsScreen() {
   }, [property?.bedrooms, property?.bathrooms, property?.area_sqm]);
 
   const ownerName = useMemo(() => safeText(contact?.owner_name, ""), [contact]);
-  const ownerPhone = useMemo(() => safeText(contact?.owner_phone, ""), [contact]);
+  const ownerPhone = useMemo(
+    () => safeText(contact?.owner_phone, ""),
+    [contact]
+  );
   const hasOwner = useMemo(
     () => Boolean(ownerName.trim() || ownerPhone.trim()),
     [ownerName, ownerPhone]
@@ -397,7 +402,11 @@ export default function AdminPropertyDetailsScreen() {
                     >
                       <View style={styles.ownerValueRow}>
                         <Text style={styles.ownerValue}>{ownerName}</Text>
-                        <FontAwesome name="copy" size={14} color={THEME.primary} />
+                        <FontAwesome
+                          name="copy"
+                          size={14}
+                          color={THEME.primary}
+                        />
                       </View>
                     </Pressable>
                   </View>
@@ -408,7 +417,9 @@ export default function AdminPropertyDetailsScreen() {
                     <Text style={styles.ownerLabel}>الرقم</Text>
 
                     <Pressable
-                      onPress={() => copyText(ownerPhone, "تم نسخ رقم الموبايل")}
+                      onPress={() =>
+                        copyText(ownerPhone, "تم نسخ رقم الموبايل")
+                      }
                       onLongPress={() =>
                         copyText(ownerPhone, "تم نسخ رقم الموبايل")
                       }
@@ -420,7 +431,11 @@ export default function AdminPropertyDetailsScreen() {
                     >
                       <View style={styles.ownerValueRow}>
                         <Text style={styles.ownerValue}>{ownerPhone}</Text>
-                        <FontAwesome name="copy" size={14} color={THEME.primary} />
+                        <FontAwesome
+                          name="copy"
+                          size={14}
+                          color={THEME.primary}
+                        />
                       </View>
                     </Pressable>
                   </View>
@@ -429,7 +444,9 @@ export default function AdminPropertyDetailsScreen() {
             </>
           )}
 
-          <Text style={styles.subHint}>يمكنك تعديل العقار من زر القلم بالأعلى.</Text>
+          <Text style={styles.subHint}>
+            يمكنك تعديل العقار من زر القلم بالأعلى.
+          </Text>
 
           {/* ✅ Buttons next to each other */}
           <View style={styles.actions}>
