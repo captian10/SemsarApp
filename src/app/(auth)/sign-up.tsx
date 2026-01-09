@@ -166,7 +166,6 @@ const SignUpScreen = () => {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Top hero / brand */}
         <View style={styles.hero}>
           <Text style={styles.heroTitle}>أنشئ حسابك للحجز بسهولة</Text>
           <Text style={styles.heroSubtitle}>
@@ -175,11 +174,9 @@ const SignUpScreen = () => {
           </Text>
         </View>
 
-        {/* Card */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>بيانات المستخدم</Text>
 
-          {/* Full Name */}
           <View style={styles.field}>
             <Text style={styles.label}>الاسم الثلاثي</Text>
             <View style={styles.inputWrapperSurface}>
@@ -200,7 +197,6 @@ const SignUpScreen = () => {
             </View>
           </View>
 
-          {/* Email */}
           <View style={styles.field}>
             <Text style={styles.label}>البريد الإلكتروني</Text>
             <View style={styles.inputWrapperSurface}>
@@ -228,7 +224,6 @@ const SignUpScreen = () => {
             </View>
           </View>
 
-          {/* Phone */}
           <View style={styles.field}>
             <Text style={styles.label}>رقم الهاتف</Text>
             <View style={styles.inputWrapperSurface}>
@@ -252,7 +247,6 @@ const SignUpScreen = () => {
             </View>
           </View>
 
-          {/* Password */}
           <View style={styles.field}>
             <Text style={styles.label}>كلمة المرور</Text>
 
@@ -286,7 +280,6 @@ const SignUpScreen = () => {
             </View>
           </View>
 
-          {/* Confirm Password */}
           <View style={styles.field}>
             <Text style={styles.label}>تأكيد كلمة المرور</Text>
 
@@ -405,22 +398,22 @@ type Styles = {
 const styles = StyleSheet.create<Styles>({
   screen: {
     flex: 1,
-    backgroundColor: THEME.dark[100], // light booking feel
+    backgroundColor: THEME.dark[100],
   },
 
   container: {
     paddingHorizontal: 18,
     paddingBottom: 32,
-    paddingTop: 40, // 👈 extra padding from top
+    paddingTop: 40,
     flexGrow: 1,
     gap: 18,
   },
   containerCenter: {
-    justifyContent: "flex-start", // start but with paddingTop so it visually sits lower
+    justifyContent: "flex-start",
   },
   containerTop: {
     justifyContent: "flex-start",
-    paddingTop: 24, // slightly less when keyboard is open
+    paddingTop: 24,
   },
 
   hero: {

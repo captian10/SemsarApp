@@ -54,8 +54,6 @@ const SignInScreen = () => {
         Alert.alert("خطأ", error.message);
         return;
       }
-
-      // لاحقًا: تقرأ profiles وتوجّه admin / user حسب الدور
     } catch (err: any) {
       Alert.alert("خطأ", err?.message ?? "حدث خطأ غير متوقع");
     } finally {
@@ -84,7 +82,6 @@ const SignInScreen = () => {
           />
         </View>
 
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>تطبيق سمسار للحجز والإستعلام</Text>
           <Text style={styles.subtitle}>
@@ -92,9 +89,7 @@ const SignInScreen = () => {
           </Text>
         </View>
 
-        {/* Card */}
         <View style={styles.card}>
-          {/* Email */}
           <View style={styles.field}>
             <Text style={styles.label}>البريد الإلكتروني</Text>
             <View style={styles.inputWrapperSurface}>
@@ -122,7 +117,6 @@ const SignInScreen = () => {
             </View>
           </View>
 
-          {/* Password */}
           <View style={styles.field}>
             <Text style={styles.label}>كلمة المرور</Text>
 
@@ -224,10 +218,9 @@ type Styles = {
 const styles = StyleSheet.create<Styles>({
   screen: {
     flex: 1,
-    backgroundColor: THEME.dark[100], // same as auth background
+    backgroundColor: THEME.dark[100],
   },
 
-  // Center content vertically, no flex-start on keyboard
   container: {
     flexGrow: 1,
     justifyContent: "center",

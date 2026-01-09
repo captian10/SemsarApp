@@ -5,7 +5,6 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
-
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import NotificationProvider from "@providers/NotificationProvider";
@@ -23,6 +22,14 @@ export { ErrorBoundary } from "expo-router";
 export const unstable_settings = { initialRouteName: "/" };
 
 SplashScreen.preventAutoHideAsync();
+
+const theme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: "transparent",
+  },
+};
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -44,38 +51,25 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <RootLayoutNav />
-    </SafeAreaProvider>
-  );
-}
-
-function RootLayoutNav() {
-  // ✅ ثابت Light (مش هنعتمد على DarkTheme)
-  const theme = DefaultTheme;
-
-  return (
-    <>
-      {/* ✅ StatusBar شفاف + ستايل مناسب للـ Light UI */}
       <StatusBar translucent backgroundColor="transparent" style="dark" />
-
       <ThemeProvider value={theme}>
         <AuthProvider>
           <QueryProvider>
             <NotificationProvider>
-                <Stack
-                  screenOptions={{
-                    headerShown: false,
-                    contentStyle: { backgroundColor: "transparent" },
-                  }}
-                >
-                  <Stack.Screen name="(admin)" />
-                  <Stack.Screen name="(user)" />
-                  <Stack.Screen name="(auth)" />
-                </Stack>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: "transparent" },
+                }}
+              >
+                <Stack.Screen name="(admin)" />
+                <Stack.Screen name="(user)" />
+                <Stack.Screen name="(auth)" />
+              </Stack>
             </NotificationProvider>
           </QueryProvider>
         </AuthProvider>
       </ThemeProvider>
-    </>
+    </SafeAreaProvider>
   );
 }
