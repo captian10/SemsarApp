@@ -25,7 +25,7 @@ import {
 } from "react-native";
 
 import { FONT } from "@/constants/Typography";
-import { THEME } from "@constants/Colors";
+import { useAppTheme } from "@providers/AppThemeProvider";
 
 const statusLabels: Record<string, string> = {
   available: "متاح",
@@ -40,7 +40,71 @@ const safeText = (v: unknown, fallback = "—") => {
   return s.length ? s : fallback;
 };
 
+type Styles = {
+  screen: ViewStyle;
+  content: ViewStyle;
+  stateWrap: ViewStyle;
+  stateText: TextStyle;
+  errorTitle: TextStyle;
+  retryBtn: ViewStyle;
+  retryText: TextStyle;
+  iconBtn: ViewStyle;
+
+  imageCard: ViewStyle;
+  image: ImageStyle;
+  badge: ViewStyle;
+  badgePrice: TextStyle;
+  badgeCurrency: TextStyle;
+
+  counterPill: ViewStyle;
+  counterText: TextStyle;
+  dots: ViewStyle;
+  dot: ViewStyle;
+  dotActive: ViewStyle;
+
+  info: ViewStyle;
+  title: TextStyle;
+  sectionTitle: TextStyle;
+  description: TextStyle;
+  sub: TextStyle;
+  subHint: TextStyle;
+  metaRow: ViewStyle;
+  metaPill: ViewStyle;
+  metaLabel: TextStyle;
+  metaValue: TextStyle;
+
+  ownerCard: ViewStyle;
+  ownerRow: ViewStyle;
+  ownerLabel: TextStyle;
+  ownerValue: TextStyle;
+  ownerValuePress: ViewStyle;
+  ownerValueRow: ViewStyle;
+
+  actions: ViewStyle;
+  actionBtn: ViewStyle;
+  actionBtnText: TextStyle;
+  deleteBtn: ViewStyle;
+  deleteBtnText: TextStyle;
+
+  pressed: ViewStyle;
+};
+
 export default function AdminPropertyDetailsScreen() {
+  const t = useAppTheme();
+  const styles = useMemo(
+    () => createStyles(t),
+    [
+      t.scheme,
+      t.colors.bg,
+      t.colors.surface,
+      t.colors.text,
+      t.colors.muted,
+      t.colors.border,
+      t.colors.primary,
+      t.colors.error,
+    ]
+  );
+
   const router = useRouter();
   const { id: idParam } = useLocalSearchParams();
   const { width: W } = useWindowDimensions();
@@ -100,14 +164,13 @@ export default function AdminPropertyDetailsScreen() {
     return list.map((url) => ({ url }));
   }, [imagesRows, property?.cover_image]);
 
-  const cardW = useMemo(() => {
-    return Math.max(W - 32, 1);
-  }, [W]);
+  const cardW = useMemo(() => Math.max(W - 32, 1), [W]);
 
+  // ✅ English numerals (0-9)
   const priceText = useMemo(() => {
     const p = Number(property?.price);
     if (!Number.isFinite(p)) return "0";
-    return p.toLocaleString("ar-EG");
+    return p.toLocaleString("en-EG");
   }, [property?.price]);
 
   const currencyText = useMemo(() => {
@@ -189,10 +252,7 @@ export default function AdminPropertyDetailsScreen() {
         <Text style={styles.errorTitle}>معرّف العقار غير صحيح</Text>
         <Pressable
           onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.retryBtn,
-            pressed && { opacity: 0.85 },
-          ]}
+          style={({ pressed }) => [styles.retryBtn, pressed && styles.pressed]}
           accessibilityLabel="رجوع"
         >
           <Text style={styles.retryText}>رجوع</Text>
@@ -204,7 +264,7 @@ export default function AdminPropertyDetailsScreen() {
   if (isLoading) {
     return (
       <View style={styles.stateWrap}>
-        <ActivityIndicator size="large" color={THEME.primary} />
+        <ActivityIndicator size="large" color={t.colors.primary} />
         <Text style={styles.stateText}>جاري تحميل البيانات...</Text>
       </View>
     );
@@ -220,10 +280,7 @@ export default function AdminPropertyDetailsScreen() {
 
         <Pressable
           onPress={() => refetch()}
-          style={({ pressed }) => [
-            styles.retryBtn,
-            pressed && { opacity: 0.85 },
-          ]}
+          style={({ pressed }) => [styles.retryBtn, pressed && styles.pressed]}
           accessibilityLabel="إعادة المحاولة"
         >
           <Text style={styles.retryText}>إعادة المحاولة</Text>
@@ -239,11 +296,12 @@ export default function AdminPropertyDetailsScreen() {
           title: "تفاصيل العقار",
           headerShadowVisible: false,
           headerTitleAlign: "center",
-          headerStyle: { backgroundColor: THEME.white.DEFAULT },
+          headerStyle: { backgroundColor: t.colors.bg },
+          headerTintColor: t.colors.text,
           headerTitleStyle: {
             fontFamily: FONT.bold,
             fontSize: 16,
-            color: THEME.dark[100],
+            color: t.colors.text,
           },
           headerRight: () => (
             <Link
@@ -257,11 +315,11 @@ export default function AdminPropertyDetailsScreen() {
                 hitSlop={10}
                 style={({ pressed }) => [
                   styles.iconBtn,
-                  pressed && { opacity: 0.85 },
+                  pressed && styles.pressed,
                 ]}
                 accessibilityLabel="تعديل العقار"
               >
-                <FontAwesome name="pencil" size={18} color={THEME.primary} />
+                <FontAwesome name="pencil" size={18} color={t.colors.primary} />
               </Pressable>
             </Link>
           ),
@@ -275,6 +333,8 @@ export default function AdminPropertyDetailsScreen() {
           <RefreshControl
             refreshing={refreshing || isFetchingImages}
             onRefresh={onRefresh}
+            tintColor={t.colors.primary}
+            colors={[t.colors.primary]}
           />
         }
       >
@@ -393,7 +453,7 @@ export default function AdminPropertyDetailsScreen() {
                         <FontAwesome
                           name="copy"
                           size={14}
-                          color={THEME.primary}
+                          color={t.colors.primary}
                         />
                       </View>
                     </Pressable>
@@ -422,7 +482,7 @@ export default function AdminPropertyDetailsScreen() {
                         <FontAwesome
                           name="copy"
                           size={14}
-                          color={THEME.primary}
+                          color={t.colors.primary}
                         />
                       </View>
                     </Pressable>
@@ -446,7 +506,7 @@ export default function AdminPropertyDetailsScreen() {
               }
               style={({ pressed }) => [
                 styles.actionBtn,
-                pressed && { opacity: 0.85 },
+                pressed && styles.pressed,
               ]}
               accessibilityLabel="تعديل العقار"
             >
@@ -457,7 +517,7 @@ export default function AdminPropertyDetailsScreen() {
               onPress={isDeleting ? undefined : confirmDelete}
               style={({ pressed }) => [
                 styles.deleteBtn,
-                pressed && !isDeleting ? { opacity: 0.85 } : null,
+                pressed && !isDeleting ? styles.pressed : null,
                 isDeleting ? { opacity: 0.6 } : null,
               ]}
               disabled={isDeleting}
@@ -474,288 +534,255 @@ export default function AdminPropertyDetailsScreen() {
   );
 }
 
-type Styles = {
-  screen: ViewStyle;
-  content: ViewStyle;
-  stateWrap: ViewStyle;
-  stateText: TextStyle;
-  errorTitle: TextStyle;
-  retryBtn: ViewStyle;
-  retryText: TextStyle;
-  iconBtn: ViewStyle;
+function createStyles(t: any) {
+  const isDark = t.scheme === "dark";
 
-  imageCard: ViewStyle;
-  image: ImageStyle;
-  badge: ViewStyle;
-  badgePrice: TextStyle;
-  badgeCurrency: TextStyle;
+  const subtleBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.03)";
+  const subtleBorder = isDark
+    ? "rgba(255,255,255,0.10)"
+    : "rgba(15,23,42,0.08)";
 
-  counterPill: ViewStyle;
-  counterText: TextStyle;
-  dots: ViewStyle;
-  dot: ViewStyle;
-  dotActive: ViewStyle;
+  const primarySoftBg = "rgba(59,130,246,0.10)";
+  const primarySoftBorder = "rgba(59,130,246,0.18)";
 
-  info: ViewStyle;
-  title: TextStyle;
-  sectionTitle: TextStyle;
-  description: TextStyle;
-  sub: TextStyle;
-  subHint: TextStyle;
-  metaRow: ViewStyle;
-  metaPill: ViewStyle;
-  metaLabel: TextStyle;
-  metaValue: TextStyle;
+  return StyleSheet.create<Styles>({
+    screen: { flex: 1, backgroundColor: t.colors.bg },
+    content: { padding: 16, paddingBottom: 32, gap: 16 },
 
-  ownerCard: ViewStyle;
-  ownerRow: ViewStyle;
-  ownerLabel: TextStyle;
-  ownerValue: TextStyle;
-  ownerValuePress: ViewStyle;
-  ownerValueRow: ViewStyle;
+    stateWrap: {
+      flex: 1,
+      backgroundColor: t.colors.bg,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24,
+      gap: 12,
+    },
+    stateText: {
+      fontSize: 14,
+      color: t.colors.muted,
+      fontFamily: FONT.regular,
+      textAlign: "center",
+    },
+    errorTitle: {
+      fontSize: 18,
+      color: t.colors.error,
+      fontFamily: FONT.bold,
+      textAlign: "center",
+    },
 
-  actions: ViewStyle;
-  actionBtn: ViewStyle;
-  actionBtnText: TextStyle;
-  deleteBtn: ViewStyle;
-  deleteBtnText: TextStyle;
+    retryBtn: {
+      marginTop: 12,
+      backgroundColor: t.colors.primary,
+      paddingHorizontal: 20,
+      paddingVertical: 14,
+      borderRadius: 16,
+    },
+    retryText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
 
-  pressed: ViewStyle;
-};
+    iconBtn: {
+      marginRight: 12,
+      width: 38,
+      height: 38,
+      borderRadius: 999,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: primarySoftBg,
+      borderWidth: 1,
+      borderColor: primarySoftBorder,
+    },
 
-const styles = StyleSheet.create<Styles>({
-  screen: { flex: 1, backgroundColor: THEME.white[100] },
-  content: { padding: 16, paddingBottom: 32, gap: 16 },
+    imageCard: {
+      position: "relative",
+      alignSelf: "center",
+      backgroundColor: t.colors.surface,
+      borderRadius: 22,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: t.colors.border,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0 : 0.08,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: isDark ? 0 : 3,
+    },
+    image: { width: "100%", aspectRatio: 1 } as ImageStyle,
 
-  stateWrap: {
-    flex: 1,
-    backgroundColor: THEME.white[100],
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    gap: 12,
-  },
-  stateText: {
-    fontSize: 14,
-    color: THEME.gray[100],
-    fontFamily: FONT.regular,
-    textAlign: "center",
-  },
-  errorTitle: {
-    fontSize: 18,
-    color: THEME.error,
-    fontFamily: FONT.bold,
-    textAlign: "center",
-  },
+    badge: {
+      position: "absolute",
+      bottom: 14,
+      right: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: isDark ? "rgba(0,0,0,0.70)" : t.colors.surface,
+      borderWidth: 1,
+      borderColor: t.colors.primary,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+    },
+    badgePrice: {
+      fontSize: 14,
+      color: t.colors.primary,
+      fontFamily: FONT.bold,
+    },
+    badgeCurrency: {
+      fontSize: 12,
+      color: t.colors.primary,
+      fontFamily: FONT.medium,
+    },
 
-  retryBtn: {
-    marginTop: 12,
-    backgroundColor: THEME.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 16,
-  },
-  retryText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
+    counterPill: {
+      position: "absolute",
+      top: 12,
+      left: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.18)",
+    },
+    counterText: { color: "#fff", fontFamily: FONT.bold, fontSize: 12 },
 
-  iconBtn: {
-    marginRight: 12,
-    width: 38,
-    height: 38,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(59,130,246,0.10)",
-    borderWidth: 1,
-    borderColor: "rgba(59,130,246,0.18)",
-  },
+    dots: {
+      position: "absolute",
+      bottom: 14,
+      left: 0,
+      right: 0,
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 6,
+    },
+    dot: {
+      width: 7,
+      height: 7,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.55)",
+    },
+    dotActive: { backgroundColor: "#fff" },
 
-  imageCard: {
-    position: "relative",
-    alignSelf: "center",
-    backgroundColor: "#fff",
-    borderRadius: 22,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.06)",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 3,
-  },
-  image: { width: "100%", aspectRatio: 1 } as ImageStyle,
+    info: {
+      backgroundColor: t.colors.surface,
+      borderRadius: 22,
+      padding: 16,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: t.colors.border,
+    },
 
-  badge: {
-    position: "absolute",
-    bottom: 14,
-    right: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: THEME.white[100],
-    borderWidth: 1,
-    borderColor: THEME.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  badgePrice: { fontSize: 14, color: THEME.primary, fontFamily: FONT.bold },
-  badgeCurrency: {
-    fontSize: 12,
-    color: THEME.primary,
-    fontFamily: FONT.medium,
-  },
+    title: {
+      fontSize: 20,
+      color: t.colors.text,
+      fontFamily: FONT.bold,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
 
-  counterPill: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: "rgba(15,23,42,0.42)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-  },
-  counterText: { color: "#fff", fontFamily: FONT.bold, fontSize: 12 },
+    sectionTitle: {
+      fontSize: 16,
+      color: t.colors.text,
+      fontFamily: FONT.bold,
+      textAlign: "right",
+      marginTop: 8,
+      writingDirection: "rtl",
+    },
 
-  dots: {
-    position: "absolute",
-    bottom: 14,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 6,
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.55)",
-  },
-  dotActive: { backgroundColor: "#fff" },
+    description: {
+      fontSize: 14,
+      color: t.colors.muted,
+      fontFamily: FONT.regular,
+      textAlign: "right",
+      lineHeight: 20,
+      writingDirection: "rtl",
+    },
 
-  info: {
-    backgroundColor: "#fff",
-    borderRadius: 22,
-    padding: 16,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.06)",
-  },
+    sub: {
+      fontSize: 14,
+      color: t.colors.text,
+      fontFamily: FONT.regular,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
 
-  title: {
-    fontSize: 20,
-    color: THEME.dark[100],
-    fontFamily: FONT.bold,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
+    subHint: {
+      fontSize: 13,
+      color: t.colors.muted,
+      fontFamily: FONT.regular,
+      textAlign: "right",
+      marginTop: 8,
+      writingDirection: "rtl",
+    },
 
-  sectionTitle: {
-    fontSize: 16,
-    color: THEME.dark[100],
-    fontFamily: FONT.bold,
-    textAlign: "right",
-    marginTop: 8,
-    writingDirection: "rtl",
-  },
+    metaRow: { flexDirection: "row-reverse", gap: 10, flexWrap: "wrap" },
+    metaPill: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: subtleBg,
+      borderWidth: 1,
+      borderColor: subtleBorder,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      maxWidth: "100%",
+    },
+    metaLabel: { fontSize: 12, color: t.colors.muted, fontFamily: FONT.medium },
+    metaValue: { fontSize: 13, color: t.colors.text, fontFamily: FONT.bold },
 
-  description: {
-    fontSize: 14,
-    color: THEME.gray[100],
-    fontFamily: FONT.regular,
-    textAlign: "right",
-    lineHeight: 20,
-    writingDirection: "rtl",
-  },
+    ownerCard: {
+      backgroundColor: subtleBg,
+      borderWidth: 1,
+      borderColor: subtleBorder,
+      borderRadius: 16,
+      padding: 12,
+      gap: 10,
+    },
+    ownerRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    ownerLabel: {
+      fontSize: 12,
+      fontFamily: FONT.medium,
+      color: t.colors.muted,
+    },
+    ownerValue: {
+      fontSize: 14,
+      fontFamily: FONT.bold,
+      color: t.colors.text,
+      textAlign: "right",
+    },
+    ownerValuePress: { flex: 1 },
+    ownerValueRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      gap: 8,
+    },
 
-  sub: {
-    fontSize: 14,
-    color: THEME.dark[100],
-    fontFamily: FONT.regular,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
+    actions: { flexDirection: "row-reverse", gap: 12, marginTop: 24 },
 
-  subHint: {
-    fontSize: 13,
-    color: THEME.gray[100],
-    fontFamily: FONT.regular,
-    textAlign: "right",
-    marginTop: 8,
-    writingDirection: "rtl",
-  },
+    actionBtn: {
+      flex: 1,
+      backgroundColor: t.colors.primary,
+      paddingVertical: 14,
+      borderRadius: 16,
+      alignItems: "center",
+    },
+    actionBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
 
-  metaRow: { flexDirection: "row-reverse", gap: 10, flexWrap: "wrap" },
-  metaPill: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(15,23,42,0.03)",
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.08)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    maxWidth: "100%",
-  },
-  metaLabel: { fontSize: 12, color: THEME.gray[100], fontFamily: FONT.medium },
-  metaValue: { fontSize: 13, color: THEME.dark[100], fontFamily: FONT.bold },
+    deleteBtn: {
+      flex: 1,
+      backgroundColor: t.colors.error,
+      paddingVertical: 14,
+      borderRadius: 16,
+      alignItems: "center",
+    },
+    deleteBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
 
-  ownerCard: {
-    backgroundColor: "rgba(15,23,42,0.03)",
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.08)",
-    borderRadius: 16,
-    padding: 12,
-    gap: 10,
-  },
-  ownerRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  ownerLabel: { fontSize: 12, fontFamily: FONT.medium, color: THEME.gray[100] },
-  ownerValue: {
-    fontSize: 14,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-    textAlign: "right",
-  },
-  ownerValuePress: { flex: 1 },
-  ownerValueRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    gap: 8,
-  },
-
-  actions: {
-    flexDirection: "row-reverse",
-    gap: 12,
-    marginTop: 24,
-  },
-
-  actionBtn: {
-    flex: 1,
-    backgroundColor: THEME.primary,
-    paddingVertical: 14,
-    borderRadius: 16,
-    alignItems: "center",
-  },
-  actionBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
-
-  deleteBtn: {
-    flex: 1,
-    backgroundColor: THEME.error,
-    paddingVertical: 14,
-    borderRadius: 16,
-    alignItems: "center",
-  },
-  deleteBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
-
-  pressed: { opacity: 0.9 },
-});
+    pressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
+  });
+}

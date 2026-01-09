@@ -87,8 +87,8 @@ const sortLabel = (sort: Sort) =>
   sort === "latest"
     ? "الأحدث"
     : sort === "price_asc"
-    ? "السعر: الأقل → الأعلى"
-    : "السعر: الأعلى → الأقل";
+    ? "السعر: من الأقل للأعلي"
+    : "السعر:  من الأعلي للأقل";
 
 function pickLatest(list: PropertyRow[], n = 12) {
   return [...list]
@@ -620,12 +620,12 @@ export default function HomeScreen() {
               onPress={() => setTmpSort("latest")}
             />
             <RadioRow
-              label="السعر: الأقل → الأعلى"
+              label="السعر: من الأقل للأعلي"
               active={tmpSort === "price_asc"}
               onPress={() => setTmpSort("price_asc")}
             />
             <RadioRow
-              label="السعر: الأعلى → الأقل"
+              label="السعر:  من الأعلي للأقل"
               active={tmpSort === "price_desc"}
               onPress={() => setTmpSort("price_desc")}
             />

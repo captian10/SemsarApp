@@ -15,7 +15,7 @@ import {
 
 import { FONT } from "@/constants/Typography";
 import { useAdminJobs, useDeleteJob, type Job } from "@api/jobs";
-import { THEME } from "@constants/Colors";
+import { useAppTheme } from "@providers/AppThemeProvider";
 
 function formatDate(iso?: string | null) {
   if (!iso) return "";
@@ -39,42 +39,56 @@ function JobAdminCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const t = useAppTheme();
+  const isDark = t.scheme === "dark";
+
   const metaParts = [job.company, job.location].filter(Boolean) as string[];
+
+  const ui = useMemo(
+    () => createStyles(t),
+    [
+      t.scheme,
+      t.colors.bg,
+      t.colors.surface,
+      t.colors.text,
+      t.colors.muted,
+      t.colors.border,
+      t.colors.primary,
+      t.colors.error,
+    ]
+  );
 
   return (
     <Pressable
       onPress={onOpen}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      style={({ pressed }) => [ui.card, pressed && ui.cardPressed]}
     >
-      <View style={styles.cardTopRow}>
-        <View style={styles.titleRow}>
-          <Text style={styles.jobTitle} numberOfLines={2}>
+      <View style={ui.cardTopRow}>
+        <View style={ui.titleRow}>
+          <Text style={ui.jobTitle} numberOfLines={2}>
             {job.title}
           </Text>
         </View>
 
-        <Text style={styles.date}>{formatDate(job.created_at)}</Text>
+        <Text style={ui.date}>{formatDate(job.created_at)}</Text>
       </View>
 
       {metaParts.length > 0 ? (
-        <Text style={styles.meta} numberOfLines={1}>
+        <Text style={ui.meta} numberOfLines={1}>
           {metaParts.join(" • ")}
         </Text>
       ) : null}
 
-      <View style={styles.actionsRow}>
+      <View style={ui.actionsRow}>
         <Pressable
           onPress={(e) => {
             e.stopPropagation();
             onEdit();
           }}
-          style={({ pressed }) => [
-            styles.primarySmallBtn,
-            pressed && { opacity: 0.9 },
-          ]}
+          style={({ pressed }) => [ui.primarySmallBtn, pressed && ui.pressed]}
         >
           <FontAwesome name="edit" size={13} color="#fff" />
-          <Text style={styles.primarySmallText}>تعديل</Text>
+          <Text style={ui.primarySmallText}>تعديل</Text>
         </Pressable>
 
         <Pressable
@@ -82,13 +96,10 @@ function JobAdminCard({
             e.stopPropagation();
             onDelete();
           }}
-          style={({ pressed }) => [
-            styles.dangerSmallBtn,
-            pressed && { opacity: 0.9 },
-          ]}
+          style={({ pressed }) => [ui.dangerSmallBtn, pressed && ui.pressed]}
         >
           <FontAwesome name="trash" size={13} color="#fff" />
-          <Text style={styles.dangerSmallText}>حذف</Text>
+          <Text style={ui.dangerSmallText}>حذف</Text>
         </Pressable>
       </View>
     </Pressable>
@@ -96,6 +107,29 @@ function JobAdminCard({
 }
 
 export default function AdminJobsIndex() {
+  const t = useAppTheme();
+  const isDark = t.scheme === "dark";
+
+  const ui = useMemo(
+    () => createStyles(t),
+    [
+      t.scheme,
+      t.colors.bg,
+      t.colors.surface,
+      t.colors.text,
+      t.colors.muted,
+      t.colors.border,
+      t.colors.primary,
+      t.colors.error,
+    ]
+  );
+
+  const placeholderColor = isDark
+    ? "rgba(255,255,255,0.35)"
+    : "rgba(15,23,42,0.35)";
+
+  const iconMuted = isDark ? "rgba(255,255,255,0.55)" : "rgba(15,23,42,0.55)";
+
   const router = useRouter();
 
   const { data, isLoading, isFetching, error, refetch } = useAdminJobs();
@@ -129,10 +163,10 @@ export default function AdminJobsIndex() {
 
   if (isLoading) {
     return (
-      <View style={styles.screen}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={THEME.primary} />
-          <Text style={styles.muted}>جاري تحميل وظائف الأدمن…</Text>
+      <View style={ui.screen}>
+        <View style={ui.center}>
+          <ActivityIndicator size="large" color={t.colors.primary} />
+          <Text style={ui.muted}>جاري تحميل وظائف الأدمن…</Text>
         </View>
       </View>
     );
@@ -140,18 +174,15 @@ export default function AdminJobsIndex() {
 
   if (error) {
     return (
-      <View style={styles.screen}>
-        <View style={styles.center}>
-          <Text style={styles.title}>إدارة الوظائف</Text>
-          <Text style={styles.error}>حصل خطأ في تحميل الوظائف</Text>
+      <View style={ui.screen}>
+        <View style={ui.center}>
+          <Text style={ui.title}>إدارة الوظائف</Text>
+          <Text style={ui.error}>حصل خطأ في تحميل الوظائف</Text>
           <Pressable
             onPress={() => refetch()}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              pressed && { opacity: 0.9 },
-            ]}
+            style={({ pressed }) => [ui.primaryBtn, pressed && ui.pressed]}
           >
-            <Text style={styles.primaryBtnText}>إعادة المحاولة</Text>
+            <Text style={ui.primaryBtnText}>إعادة المحاولة</Text>
           </Pressable>
         </View>
       </View>
@@ -159,33 +190,43 @@ export default function AdminJobsIndex() {
   }
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.topRow}>
+    <View style={ui.screen}>
+      <View style={ui.topRow}>
         <Pressable
           onPress={() => router.push("/(admin)/jobs/create")}
-          style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.9 }]}
+          style={({ pressed }) => [ui.addBtn, pressed && ui.pressed]}
         >
           <FontAwesome name="plus" size={16} color="#fff" />
-          <Text style={styles.addBtnText}>إضافة وظيفة</Text>
+          <Text style={ui.addBtnText}>إضافة وظيفة</Text>
         </Pressable>
 
         <View style={{ flex: 1 }} />
       </View>
 
-      <View style={styles.searchWrap}>
-        <FontAwesome name="search" size={14} color={THEME.gray[100]} />
+      <View style={ui.searchWrap}>
+        <FontAwesome name="search" size={14} color={iconMuted} />
         <TextInput
           value={q}
           onChangeText={setQ}
           placeholder="ابحث بالعنوان أو الشركة أو المكان…"
-          placeholderTextColor={THEME.gray[100]}
-          style={styles.searchInput}
+          placeholderTextColor={placeholderColor}
+          style={ui.searchInput}
           textAlign="right"
         />
+        {!!q && (
+          <Pressable
+            onPress={() => setQ("")}
+            hitSlop={10}
+            style={({ pressed }) => [ui.clearBtn, pressed && ui.pressed]}
+            accessibilityLabel="مسح البحث"
+          >
+            <FontAwesome name="times" size={12} color={iconMuted} />
+          </Pressable>
+        )}
       </View>
 
-      <View style={styles.statsRow}>
-        <Text style={styles.statText}>العدد: {list.length}</Text>
+      <View style={ui.statsRow}>
+        <Text style={ui.statText}>العدد: {list.length}</Text>
       </View>
 
       <FlatList
@@ -201,20 +242,20 @@ export default function AdminJobsIndex() {
         )}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         contentContainerStyle={[
-          styles.listContent,
-          list.length === 0 && styles.listEmpty,
+          ui.listContent,
+          list.length === 0 && ui.listEmpty,
         ]}
         refreshControl={
           <RefreshControl
             refreshing={!!isFetching}
             onRefresh={refetch}
-            tintColor={THEME.primary}
+            tintColor={t.colors.primary}
           />
         }
         ListEmptyComponent={
-          <View style={styles.center}>
-            <Text style={styles.emptyTitle}>مفيش وظائف</Text>
-            <Text style={styles.muted}>اضغط “إضافة وظيفة” لبدء النشر.</Text>
+          <View style={ui.center}>
+            <Text style={ui.emptyTitle}>مفيش وظائف</Text>
+            <Text style={ui.muted}>اضغط “إضافة وظيفة” لبدء النشر.</Text>
           </View>
         }
         showsVerticalScrollIndicator={false}
@@ -223,209 +264,208 @@ export default function AdminJobsIndex() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: THEME.white[100],
-    paddingHorizontal: 12,
-    paddingTop: 12,
-  },
+function createStyles(t: any) {
+  const isDark = t.scheme === "dark";
+  const subtleBorder = isDark
+    ? "rgba(255,255,255,0.10)"
+    : "rgba(15,23,42,0.10)";
+  const subtleBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.03)";
 
-  topRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    marginBottom: 10,
-  },
+  const pressed: any = { opacity: 0.92, transform: [{ scale: 0.995 }] };
 
-  addBtn: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: THEME.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-  },
-  addBtnText: {
-    color: "#fff",
-    fontFamily: FONT.bold,
-    fontSize: 13,
-  },
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: t.colors.bg,
+      paddingHorizontal: 12,
+      paddingTop: 12,
+    },
 
-  searchWrap: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: THEME.white.DEFAULT,
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.08)",
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: FONT.regular,
-    fontSize: 13,
-    color: THEME.dark[100],
-    paddingVertical: 0,
-  },
+    topRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      marginBottom: 10,
+    },
 
-  statsRow: {
-    flexDirection: "row-reverse",
-    marginBottom: 12,
-  },
-  statText: {
-    fontFamily: FONT.medium,
-    fontSize: 12,
-    color: THEME.gray[100],
-  },
+    addBtn: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: t.colors.primary,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+    },
+    addBtnText: {
+      color: "#fff",
+      fontFamily: FONT.bold,
+      fontSize: 13,
+    },
 
-  listContent: {
-    paddingBottom: 12,
-  },
-  listEmpty: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
+    searchWrap: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: t.colors.surface,
+      borderWidth: 1,
+      borderColor: t.colors.border ?? subtleBorder,
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 10,
+    },
+    searchInput: {
+      flex: 1,
+      fontFamily: FONT.regular,
+      fontSize: 13,
+      color: t.colors.text,
+      paddingVertical: 0,
+      writingDirection: "rtl",
+    },
+    clearBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 999,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: subtleBg,
+      borderWidth: 1,
+      borderColor: subtleBorder,
+    },
 
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingHorizontal: 16,
-  },
+    statsRow: {
+      flexDirection: "row-reverse",
+      marginBottom: 12,
+    },
+    statText: {
+      fontFamily: FONT.medium,
+      fontSize: 12,
+      color: t.colors.muted,
+    },
 
-  title: {
-    fontFamily: FONT.bold,
-    fontSize: 18,
-    color: THEME.dark[100],
-  },
+    listContent: { paddingBottom: 12 },
+    listEmpty: { flexGrow: 1, justifyContent: "center" },
 
-  emptyTitle: {
-    fontFamily: FONT.bold,
-    fontSize: 16,
-    color: THEME.dark[100],
-    textAlign: "center",
-  },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      paddingHorizontal: 16,
+    },
 
-  muted: {
-    fontFamily: FONT.regular,
-    fontSize: 12,
-    color: THEME.gray[100],
-    textAlign: "center",
-  },
+    title: { fontFamily: FONT.bold, fontSize: 18, color: t.colors.text },
 
-  error: {
-    fontFamily: FONT.medium,
-    fontSize: 12,
-    color: THEME.error,
-    textAlign: "center",
-  },
+    emptyTitle: {
+      fontFamily: FONT.bold,
+      fontSize: 16,
+      color: t.colors.text,
+      textAlign: "center",
+    },
 
-  primaryBtn: {
-    marginTop: 6,
-    alignSelf: "stretch",
-    backgroundColor: THEME.primary,
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryBtnText: {
-    color: "#fff",
-    fontFamily: FONT.bold,
-    fontSize: 14,
-  },
+    muted: {
+      fontFamily: FONT.regular,
+      fontSize: 12,
+      color: t.colors.muted,
+      textAlign: "center",
+    },
 
-  card: {
-    backgroundColor: THEME.white.DEFAULT,
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.08)",
-    borderRadius: 16,
-    padding: 14,
-  },
-  cardPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.995 }],
-  },
+    error: {
+      fontFamily: FONT.medium,
+      fontSize: 12,
+      color: t.colors.error,
+      textAlign: "center",
+    },
 
-  cardTopRow: {
-    flexDirection: "row-reverse",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 10,
-    marginBottom: 6,
-  },
+    primaryBtn: {
+      marginTop: 6,
+      alignSelf: "stretch",
+      backgroundColor: t.colors.primary,
+      paddingVertical: 12,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    primaryBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
 
-  titleRow: {
-    flex: 1,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-  },
+    // Card
+    card: {
+      backgroundColor: t.colors.surface,
+      borderWidth: 1,
+      borderColor: t.colors.border ?? subtleBorder,
+      borderRadius: 16,
+      padding: 14,
+    },
+    cardPressed: pressed,
 
-  jobTitle: {
-    flex: 1,
-    fontFamily: FONT.bold,
-    fontSize: 15,
-    color: THEME.dark[100],
-    textAlign: "right",
-  },
+    cardTopRow: {
+      flexDirection: "row-reverse",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 6,
+    },
 
-  meta: {
-    fontFamily: FONT.regular,
-    fontSize: 12,
-    color: THEME.gray[100],
-    textAlign: "right",
-    marginBottom: 12,
-  },
+    titleRow: {
+      flex: 1,
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      gap: 8,
+    },
 
-  date: {
-    fontFamily: FONT.regular,
-    fontSize: 11,
-    color: THEME.gray[100],
-    marginTop: 2,
-    textAlign: "left",
-  },
+    jobTitle: {
+      flex: 1,
+      fontFamily: FONT.bold,
+      fontSize: 15,
+      color: t.colors.text,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
 
-  actionsRow: {
-    flexDirection: "row-reverse",
-    gap: 8,
-  },
+    meta: {
+      fontFamily: FONT.regular,
+      fontSize: 12,
+      color: t.colors.muted,
+      textAlign: "right",
+      marginBottom: 12,
+      writingDirection: "rtl",
+    },
 
-  primarySmallBtn: {
-    flex: 1,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: THEME.primary,
-    paddingVertical: 10,
-    borderRadius: 14,
-  },
-  primarySmallText: {
-    color: "#fff",
-    fontFamily: FONT.bold,
-    fontSize: 12,
-  },
+    date: {
+      fontFamily: FONT.regular,
+      fontSize: 11,
+      color: t.colors.muted,
+      marginTop: 2,
+      textAlign: "left",
+    },
 
-  dangerSmallBtn: {
-    flex: 1,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: THEME.error,
-    paddingVertical: 10,
-    borderRadius: 14,
-  },
-  dangerSmallText: {
-    color: "#fff",
-    fontFamily: FONT.bold,
-    fontSize: 12,
-  },
-});
+    actionsRow: { flexDirection: "row-reverse", gap: 8 },
+
+    primarySmallBtn: {
+      flex: 1,
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      backgroundColor: t.colors.primary,
+      paddingVertical: 10,
+      borderRadius: 14,
+    },
+    primarySmallText: { color: "#fff", fontFamily: FONT.bold, fontSize: 12 },
+
+    dangerSmallBtn: {
+      flex: 1,
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      backgroundColor: t.colors.error,
+      paddingVertical: 10,
+      borderRadius: 14,
+    },
+    dangerSmallText: { color: "#fff", fontFamily: FONT.bold, fontSize: 12 },
+
+    pressed,
+  });
+}

@@ -1,20 +1,24 @@
-import { Stack } from "expo-router";
-import { THEME } from "@constants/Colors";
 import { FONT } from "@/constants/Typography";
+import { useAppTheme } from "@providers/AppThemeProvider";
+import { Stack } from "expo-router";
+import React from "react";
 
 export default function AdminJobsStack() {
+  const t = useAppTheme();
+
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: THEME.white[100] },
+        headerStyle: { backgroundColor: t.colors.bg },
         headerShadowVisible: false,
+        headerTintColor: t.colors.text,
         headerTitleStyle: {
           fontFamily: FONT.bold,
-          color: THEME.dark[100],
+          color: t.colors.text,
           fontSize: 18,
         },
         headerTitleAlign: "center",
-        contentStyle: { backgroundColor: THEME.white[100] },
+        contentStyle: { backgroundColor: t.colors.bg },
       }}
     >
       <Stack.Screen

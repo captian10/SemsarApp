@@ -12,7 +12,6 @@ import {
   usePropertyContact,
   useUpsertPropertyContact,
 } from "@api/property-contacts";
-import { THEME } from "@constants/Colors";
 import { supabase } from "@lib/supabase";
 import { decode } from "base64-arraybuffer";
 import { randomUUID } from "expo-crypto";
@@ -47,6 +46,8 @@ import {
 } from "react-native";
 
 import { FONT } from "@/constants/Typography";
+import { useAppTheme } from "@providers/AppThemeProvider";
+
 import Button from "../../../components/Button";
 import { defaultPropertyImage as defaultPropertyImageUrl } from "../../../components/PropertyCard";
 
@@ -157,7 +158,71 @@ function formReducer(state: FormData, action: FormAction): FormData {
   }
 }
 
+type Styles = {
+  screen: ViewStyle;
+  container: ViewStyle;
+  header: ViewStyle;
+  title: TextStyle;
+  subtitle: TextStyle;
+  card: ViewStyle;
+
+  inputRtl: any;
+
+  imageWrap: ViewStyle;
+  image: ImageStyle;
+  imageOverlay: ViewStyle;
+  imageOverlayText: TextStyle;
+
+  field: ViewStyle;
+  label: TextStyle;
+  input: any;
+  inputMultiline: any;
+
+  priceRow: ViewStyle;
+  currencyPill: ViewStyle;
+  currencyText: TextStyle;
+  priceInput: any;
+
+  chipsRow: ViewStyle;
+  chip: ViewStyle;
+  chipActive: ViewStyle;
+  chipText: TextStyle;
+  chipTextActive: TextStyle;
+
+  statusRow: ViewStyle;
+  statusChip: ViewStyle;
+  statusChipActive: ViewStyle;
+  statusText: TextStyle;
+  statusTextActive: TextStyle;
+
+  sectionHeaderRow: ViewStyle;
+  sectionHint: TextStyle;
+  specToggle: ViewStyle;
+  specToggleText: TextStyle;
+
+  grid3: ViewStyle;
+
+  addImagesBtn: ViewStyle;
+  addImagesBtnText: TextStyle;
+  thumbsRow: ViewStyle;
+  thumbWrap: ViewStyle;
+  thumb: ImageStyle;
+  thumbRemove: ViewStyle;
+  thumbRemoveText: TextStyle;
+  miniHint: TextStyle;
+
+  error: TextStyle;
+  delete: ViewStyle;
+  deleteText: TextStyle;
+  loadingText: TextStyle;
+
+  pressed: ViewStyle;
+  disabled: ViewStyle;
+};
+
 const Field = memo(function Field({
+  ui,
+  placeholderColor,
   label,
   value,
   onChangeText,
@@ -168,6 +233,8 @@ const Field = memo(function Field({
   numberOfLines,
   accessibilityLabel,
 }: {
+  ui: any;
+  placeholderColor: string;
   label: string;
   value: string;
   onChangeText: (t: string) => void;
@@ -179,18 +246,14 @@ const Field = memo(function Field({
   accessibilityLabel?: string;
 }) {
   return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+    <View style={ui.field}>
+      <Text style={ui.label}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={THEME.gray[100]}
-        style={[
-          styles.input,
-          styles.inputRtl,
-          multiline ? styles.inputMultiline : null,
-        ]}
+        placeholderTextColor={placeholderColor}
+        style={[ui.input, ui.inputRtl, multiline ? ui.inputMultiline : null]}
         editable={!loading}
         textAlign="right"
         blurOnSubmit={false}
@@ -205,27 +268,31 @@ const Field = memo(function Field({
 });
 
 const PriceInput = memo(function PriceInput({
+  ui,
+  placeholderColor,
   value,
   onChangeText,
   currency,
   loading,
 }: {
+  ui: any;
+  placeholderColor: string;
   value: string;
   onChangeText: (t: string) => void;
   currency: string;
   loading: boolean;
 }) {
   return (
-    <View style={styles.field}>
-      <Text style={styles.label}>السعر</Text>
+    <View style={ui.field}>
+      <Text style={ui.label}>السعر</Text>
 
-      <View style={styles.priceRow}>
+      <View style={ui.priceRow}>
         <TextInput
           value={value}
           onChangeText={onChangeText}
-          placeholder="مثال: 1500000"
-          placeholderTextColor={THEME.gray[100]}
-          style={[styles.input, styles.priceInput, styles.inputRtl]}
+          placeholder="مثال: 1500"
+          placeholderTextColor={placeholderColor}
+          style={[ui.input, ui.priceInput, ui.inputRtl]}
           keyboardType="decimal-pad"
           editable={!loading}
           textAlign="right"
@@ -234,8 +301,8 @@ const PriceInput = memo(function PriceInput({
           accessibilityLabel="السعر"
         />
 
-        <View style={styles.currencyPill}>
-          <Text style={styles.currencyText}>{String(currency || "جنيه")}</Text>
+        <View style={ui.currencyPill}>
+          <Text style={ui.currencyText}>{String(currency || "جنيه")}</Text>
         </View>
       </View>
     </View>
@@ -243,21 +310,23 @@ const PriceInput = memo(function PriceInput({
 });
 
 const PropertyTypeSelector = memo(function PropertyTypeSelector({
+  ui,
   propertyType,
   setPropertyType,
   loading,
 }: {
+  ui: any;
   propertyType: PropertyType;
   setPropertyType: (t: PropertyType) => void;
   loading: boolean;
 }) {
   return (
-    <View style={styles.field}>
-      <Text style={styles.label}>نوع العقار</Text>
+    <View style={ui.field}>
+      <Text style={ui.label}>نوع العقار</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipsRow}
+        contentContainerStyle={ui.chipsRow}
         keyboardShouldPersistTaps="always"
       >
         {PROPERTY_TYPES.map((t) => {
@@ -267,17 +336,15 @@ const PropertyTypeSelector = memo(function PropertyTypeSelector({
               key={t}
               onPress={() => setPropertyType(t)}
               style={({ pressed }) => [
-                styles.chip,
-                active ? styles.chipActive : null,
-                pressed ? styles.pressed : null,
-                loading ? styles.disabled : null,
+                ui.chip,
+                active ? ui.chipActive : null,
+                pressed ? ui.pressed : null,
+                loading ? ui.disabled : null,
               ]}
               disabled={loading}
               accessibilityLabel={`نوع العقار: ${t}`}
             >
-              <Text
-                style={[styles.chipText, active ? styles.chipTextActive : null]}
-              >
+              <Text style={[ui.chipText, active ? ui.chipTextActive : null]}>
                 {t}
               </Text>
             </Pressable>
@@ -289,10 +356,12 @@ const PropertyTypeSelector = memo(function PropertyTypeSelector({
 });
 
 const StatusSelector = memo(function StatusSelector({
+  ui,
   status,
   setStatus,
   loading,
 }: {
+  ui: any;
   status: PropertyStatus;
   setStatus: (s: PropertyStatus) => void;
   loading: boolean;
@@ -304,9 +373,9 @@ const StatusSelector = memo(function StatusSelector({
   };
 
   return (
-    <View style={styles.field}>
-      <Text style={styles.label}>الحالة</Text>
-      <View style={styles.statusRow}>
+    <View style={ui.field}>
+      <Text style={ui.label}>الحالة</Text>
+      <View style={ui.statusRow}>
         {PROPERTY_STATUS.map((s) => {
           const active = status === s;
           const label = statusLabels[s] ?? s;
@@ -315,19 +384,16 @@ const StatusSelector = memo(function StatusSelector({
               key={s}
               onPress={() => setStatus(s)}
               style={({ pressed }) => [
-                styles.statusChip,
-                active ? styles.statusChipActive : null,
-                pressed ? styles.pressed : null,
-                loading ? styles.disabled : null,
+                ui.statusChip,
+                active ? ui.statusChipActive : null,
+                pressed ? ui.pressed : null,
+                loading ? ui.disabled : null,
               ]}
               disabled={loading}
               accessibilityLabel={`حالة العقار: ${label}`}
             >
               <Text
-                style={[
-                  styles.statusText,
-                  active ? styles.statusTextActive : null,
-                ]}
+                style={[ui.statusText, active ? ui.statusTextActive : null]}
               >
                 {label}
               </Text>
@@ -340,6 +406,27 @@ const StatusSelector = memo(function StatusSelector({
 });
 
 export default function CreatePropertyScreen() {
+  const t = useAppTheme();
+  const isDark = t.scheme === "dark";
+
+  const ui = useMemo(
+    () => createStyles(t),
+    [
+      t.scheme,
+      t.colors.bg,
+      t.colors.surface,
+      t.colors.text,
+      t.colors.muted,
+      t.colors.border,
+      t.colors.primary,
+      t.colors.error,
+    ]
+  );
+
+  const placeholderColor = isDark
+    ? "rgba(255,255,255,0.35)"
+    : "rgba(15,23,42,0.35)";
+
   const router = useRouter();
   const { id: idParam } = useLocalSearchParams();
 
@@ -709,9 +796,7 @@ export default function CreatePropertyScreen() {
       });
 
     if (error) {
-      if (isRlsError(error)) {
-        throw new Error("RLS منع رفع الصورة في Storage.");
-      }
+      if (isRlsError(error)) throw new Error("RLS منع رفع الصورة في Storage.");
       throw new Error(error.message);
     }
 
@@ -923,7 +1008,7 @@ export default function CreatePropertyScreen() {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <KeyboardAvoidingView
-        style={styles.screen}
+        style={ui.screen}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
@@ -931,9 +1016,10 @@ export default function CreatePropertyScreen() {
           options={{
             title: isUpdating ? "تعديل عقار" : "إضافة عقار",
             headerShadowVisible: false,
-            headerStyle: { backgroundColor: THEME.white.DEFAULT },
+            headerStyle: { backgroundColor: t.colors.bg },
+            headerTintColor: t.colors.text,
             headerTitleStyle: {
-              color: THEME.dark[100],
+              color: t.colors.text,
               fontFamily: FONT.bold,
               fontSize: 18,
             },
@@ -941,37 +1027,37 @@ export default function CreatePropertyScreen() {
         />
 
         <ScrollView
-          contentContainerStyle={styles.container}
+          contentContainerStyle={ui.container}
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="none"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.header}>
-            <Text style={styles.title}>
+          <View style={ui.header}>
+            <Text style={ui.title}>
               {isUpdating ? "تعديل بيانات العقار" : "إضافة عقار جديد"}
             </Text>
-            <Text style={styles.subtitle}>
+            <Text style={ui.subtitle}>
               أضف صورة الغلاف، صور إضافية، العنوان، السعر، والمواصفات الأساسية.
             </Text>
           </View>
 
-          <View style={styles.card}>
+          <View style={ui.card}>
             <Pressable
               onPress={loading ? undefined : pickCoverImage}
               style={({ pressed }) => [
-                styles.imageWrap,
-                pressed && !loading ? styles.pressed : null,
-                loading ? styles.disabled : null,
+                ui.imageWrap,
+                pressed && !loading ? ui.pressed : null,
+                loading ? ui.disabled : null,
               ]}
               accessibilityLabel="اختيار صورة الغلاف"
             >
               <Image
                 source={imageSourceForPreview}
-                style={styles.image}
+                style={ui.image}
                 resizeMode="cover"
               />
-              <View style={styles.imageOverlay}>
-                <Text style={styles.imageOverlayText}>
+              <View style={ui.imageOverlay}>
+                <Text style={ui.imageOverlayText}>
                   {formData.coverImage
                     ? "تغيير صورة الغلاف"
                     : "اختيار صورة غلاف"}
@@ -979,19 +1065,19 @@ export default function CreatePropertyScreen() {
               </View>
             </Pressable>
 
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHint}>صور إضافية (اختياري)</Text>
+            <View style={ui.sectionHeaderRow}>
+              <Text style={ui.sectionHint}>صور إضافية (اختياري)</Text>
 
               <Pressable
                 onPress={() => setShowExtraImages((p) => !p)}
                 style={({ pressed }) => [
-                  styles.specToggle,
-                  pressed && styles.pressed,
-                  loading && styles.disabled,
+                  ui.specToggle,
+                  pressed && ui.pressed,
+                  loading && ui.disabled,
                 ]}
                 disabled={loading}
               >
-                <Text style={styles.specToggleText}>
+                <Text style={ui.specToggleText}>
                   {showExtraImages ? "إخفاء" : "إضافة"}
                 </Text>
               </Pressable>
@@ -1002,36 +1088,36 @@ export default function CreatePropertyScreen() {
                 <Pressable
                   onPress={loading ? undefined : pickExtraImages}
                   style={({ pressed }) => [
-                    styles.addImagesBtn,
-                    pressed && styles.pressed,
-                    loading && styles.disabled,
+                    ui.addImagesBtn,
+                    pressed && ui.pressed,
+                    loading && ui.disabled,
                   ]}
                   disabled={loading}
                   accessibilityLabel="إضافة صور إضافية"
                 >
-                  <Text style={styles.addImagesBtnText}>إضافة صور</Text>
+                  <Text style={ui.addImagesBtnText}>إضافة صور</Text>
                 </Pressable>
 
                 {extraImages.length > 0 && (
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.thumbsRow}
+                    contentContainerStyle={ui.thumbsRow}
                   >
                     {extraThumbs.map((it) => (
-                      <View key={it.key} style={styles.thumbWrap}>
+                      <View key={it.key} style={ui.thumbWrap}>
                         <Image
                           source={{ uri: it.uri }}
-                          style={styles.thumb}
+                          style={ui.thumb}
                           resizeMode="cover"
                         />
                         <Pressable
                           onPress={() => removeExtraImage(it.raw)}
-                          style={styles.thumbRemove}
+                          style={ui.thumbRemove}
                           hitSlop={10}
                           accessibilityLabel="حذف الصورة"
                         >
-                          <Text style={styles.thumbRemoveText}>×</Text>
+                          <Text style={ui.thumbRemoveText}>×</Text>
                         </Pressable>
                       </View>
                     ))}
@@ -1039,7 +1125,7 @@ export default function CreatePropertyScreen() {
                 )}
 
                 {extraImages.length === 0 && (
-                  <Text style={styles.miniHint}>
+                  <Text style={ui.miniHint}>
                     يمكنك إضافة 1 أو أكثر صور. لو ما أضفتش صور مش مشكلة.
                   </Text>
                 )}
@@ -1047,16 +1133,20 @@ export default function CreatePropertyScreen() {
             )}
 
             <Field
+              ui={ui}
+              placeholderColor={placeholderColor}
               label="عنوان العقار"
               value={formData.title}
               onChangeText={(v) =>
                 dispatchForm({ type: "UPDATE_FIELD", field: "title", value: v })
               }
-              placeholder="مثال: شقة للبيع في مدينة نصر"
+              placeholder="مثال: شقة للبيع في قنا"
               loading={loading}
             />
 
             <Field
+              ui={ui}
+              placeholderColor={placeholderColor}
               label="وصف (اختياري)"
               value={formData.description}
               onChangeText={(v) =>
@@ -1073,6 +1163,7 @@ export default function CreatePropertyScreen() {
             />
 
             <PropertyTypeSelector
+              ui={ui}
               propertyType={formData.propertyType}
               setPropertyType={(v) =>
                 dispatchForm({
@@ -1085,6 +1176,7 @@ export default function CreatePropertyScreen() {
             />
 
             <StatusSelector
+              ui={ui}
               status={formData.status}
               setStatus={(v) =>
                 dispatchForm({
@@ -1097,6 +1189,8 @@ export default function CreatePropertyScreen() {
             />
 
             <PriceInput
+              ui={ui}
+              placeholderColor={placeholderColor}
               value={formData.price}
               onChangeText={(v) =>
                 dispatchForm({ type: "UPDATE_FIELD", field: "price", value: v })
@@ -1106,6 +1200,8 @@ export default function CreatePropertyScreen() {
             />
 
             <Field
+              ui={ui}
+              placeholderColor={placeholderColor}
               label="المدينة (اختياري)"
               value={formData.city}
               onChangeText={(v) =>
@@ -1116,6 +1212,8 @@ export default function CreatePropertyScreen() {
             />
 
             <Field
+              ui={ui}
+              placeholderColor={placeholderColor}
               label="العنوان (اختياري)"
               value={formData.address}
               onChangeText={(v) =>
@@ -1125,23 +1223,23 @@ export default function CreatePropertyScreen() {
                   value: v,
                 })
               }
-              placeholder="مثال: شارع أحمد عرابي – المهندسين"
+              placeholder="مثال: شارع النيل، أمام المستشفى"
               loading={loading}
             />
 
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHint}>صاحب العقار (للأدمن فقط)</Text>
+            <View style={ui.sectionHeaderRow}>
+              <Text style={ui.sectionHint}>صاحب العقار (للأدمن فقط)</Text>
 
               <Pressable
                 onPress={() => setShowOwner((p) => !p)}
                 style={({ pressed }) => [
-                  styles.specToggle,
-                  pressed && styles.pressed,
-                  loading && styles.disabled,
+                  ui.specToggle,
+                  pressed && ui.pressed,
+                  loading && ui.disabled,
                 ]}
                 disabled={loading}
               >
-                <Text style={styles.specToggleText}>
+                <Text style={ui.specToggleText}>
                   {showOwner ? "إخفاء" : "إضافة"}
                 </Text>
               </Pressable>
@@ -1150,6 +1248,8 @@ export default function CreatePropertyScreen() {
             {showOwner && (
               <>
                 <Field
+                  ui={ui}
+                  placeholderColor={placeholderColor}
                   label="اسم صاحب العقار (اختياري)"
                   value={formData.ownerName}
                   onChangeText={(v) =>
@@ -1164,6 +1264,8 @@ export default function CreatePropertyScreen() {
                 />
 
                 <Field
+                  ui={ui}
+                  placeholderColor={placeholderColor}
                   label="رقم الموبايل (اختياري)"
                   value={formData.ownerPhone}
                   onChangeText={(v) =>
@@ -1180,28 +1282,30 @@ export default function CreatePropertyScreen() {
               </>
             )}
 
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHint}>المواصفات (اختياري)</Text>
+            <View style={ui.sectionHeaderRow}>
+              <Text style={ui.sectionHint}>المواصفات (اختياري)</Text>
 
               <Pressable
                 onPress={() => setShowSpecs((p) => !p)}
                 style={({ pressed }) => [
-                  styles.specToggle,
-                  pressed && styles.pressed,
-                  loading && styles.disabled,
+                  ui.specToggle,
+                  pressed && ui.pressed,
+                  loading && ui.disabled,
                 ]}
                 disabled={loading}
               >
-                <Text style={styles.specToggleText}>
+                <Text style={ui.specToggleText}>
                   {showSpecs ? "إخفاء" : "إضافة"}
                 </Text>
               </Pressable>
             </View>
 
             {showSpecs && (
-              <View style={styles.grid3}>
+              <View style={ui.grid3}>
                 <View style={{ flex: 1 }}>
                   <Field
+                    ui={ui}
+                    placeholderColor={placeholderColor}
                     label="غرف"
                     value={formData.bedrooms}
                     onChangeText={(v) =>
@@ -1219,6 +1323,8 @@ export default function CreatePropertyScreen() {
 
                 <View style={{ flex: 1 }}>
                   <Field
+                    ui={ui}
+                    placeholderColor={placeholderColor}
                     label="حمامات"
                     value={formData.bathrooms}
                     onChangeText={(v) =>
@@ -1236,6 +1342,8 @@ export default function CreatePropertyScreen() {
 
                 <View style={{ flex: 1 }}>
                   <Field
+                    ui={ui}
+                    placeholderColor={placeholderColor}
                     label="مساحة (م²)"
                     value={formData.area}
                     onChangeText={(v) =>
@@ -1256,7 +1364,7 @@ export default function CreatePropertyScreen() {
             {errors.length > 0 && (
               <View style={{ marginBottom: 10 }}>
                 {errors.map((err, idx) => (
-                  <Text key={idx} style={styles.error}>
+                  <Text key={idx} style={ui.error}>
                     {err}
                   </Text>
                 ))}
@@ -1279,17 +1387,17 @@ export default function CreatePropertyScreen() {
               <Pressable
                 onPress={loading ? undefined : confirmDelete}
                 style={({ pressed }) => [
-                  styles.delete,
-                  pressed && !loading ? styles.pressed : null,
-                  loading ? styles.disabled : null,
+                  ui.delete,
+                  pressed && !loading ? ui.pressed : null,
+                  loading ? ui.disabled : null,
                 ]}
                 accessibilityLabel="حذف العقار"
               >
-                <Text style={styles.deleteText}>حذف العقار</Text>
+                <Text style={ui.deleteText}>حذف العقار</Text>
               </Pressable>
             )}
 
-            {loading && <Text style={styles.loadingText}>جاري الحفظ...</Text>}
+            {loading && <Text style={ui.loadingText}>جاري الحفظ...</Text>}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1297,300 +1405,250 @@ export default function CreatePropertyScreen() {
   );
 }
 
-type Styles = {
-  screen: ViewStyle;
-  container: ViewStyle;
-  header: ViewStyle;
-  title: TextStyle;
-  subtitle: TextStyle;
-  card: ViewStyle;
+function createStyles(t: any) {
+  const isDark = t.scheme === "dark";
 
-  inputRtl: any;
+  const subtleBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.03)";
+  const subtleBorder = isDark
+    ? "rgba(255,255,255,0.10)"
+    : "rgba(15,23,42,0.10)";
 
-  imageWrap: ViewStyle;
-  image: ImageStyle;
-  imageOverlay: ViewStyle;
-  imageOverlayText: TextStyle;
+  const inputBg = isDark ? "rgba(255,255,255,0.03)" : "rgba(15,23,42,0.02)";
 
-  field: ViewStyle;
-  label: TextStyle;
-  input: any;
-  inputMultiline: any;
+  const primarySoftBg = "rgba(59,130,246,0.10)";
+  const primarySoftBorder = "rgba(59,130,246,0.18)";
 
-  priceRow: ViewStyle;
-  currencyPill: ViewStyle;
-  currencyText: TextStyle;
-  priceInput: any;
+  return StyleSheet.create<Styles>({
+    screen: { flex: 1, backgroundColor: t.colors.bg },
+    container: { padding: 16, paddingBottom: 40 },
 
-  chipsRow: ViewStyle;
-  chip: ViewStyle;
-  chipActive: ViewStyle;
-  chipText: TextStyle;
-  chipTextActive: TextStyle;
+    header: { paddingHorizontal: 2, marginBottom: 10 },
+    title: {
+      fontSize: 22,
+      color: t.colors.text,
+      textAlign: "right",
+      fontFamily: FONT.bold,
+      writingDirection: "rtl",
+    },
+    subtitle: {
+      fontSize: 13,
+      marginTop: 4,
+      color: t.colors.muted,
+      textAlign: "right",
+      fontFamily: FONT.regular,
+      writingDirection: "rtl",
+    },
 
-  statusRow: ViewStyle;
-  statusChip: ViewStyle;
-  statusChipActive: ViewStyle;
-  statusText: TextStyle;
-  statusTextActive: TextStyle;
+    card: {
+      backgroundColor: t.colors.surface,
+      borderRadius: 22,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: t.colors.border,
+      shadowColor: "#000000",
+      shadowOpacity: isDark ? 0 : 0.08,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: isDark ? 0 : 3,
+    },
 
-  sectionHeaderRow: ViewStyle;
-  sectionHint: TextStyle;
-  specToggle: ViewStyle;
-  specToggleText: TextStyle;
+    imageWrap: {
+      borderRadius: 18,
+      backgroundColor: t.colors.surface,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: subtleBorder,
+      position: "relative",
+      marginBottom: 12,
+    },
+    image: { width: "100%", aspectRatio: 16 / 9 },
+    imageOverlay: {
+      position: "absolute",
+      bottom: 10,
+      right: 10,
+      backgroundColor: t.colors.primary,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+    },
+    imageOverlayText: { color: "#fff", fontSize: 12, fontFamily: FONT.bold },
 
-  grid3: ViewStyle;
+    field: { marginBottom: 12 },
+    label: {
+      fontSize: 12,
+      marginBottom: 6,
+      color: t.colors.text,
+      textAlign: "right",
+      fontFamily: FONT.medium,
+      writingDirection: "rtl",
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: subtleBorder,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      backgroundColor: inputBg,
+      borderRadius: 14,
+      fontSize: 15,
+      color: t.colors.text,
+      fontFamily: FONT.regular,
+    },
+    inputMultiline: { minHeight: 110, textAlignVertical: "top" as const },
+    inputRtl: { writingDirection: "rtl" as const },
 
-  addImagesBtn: ViewStyle;
-  addImagesBtnText: TextStyle;
-  thumbsRow: ViewStyle;
-  thumbWrap: ViewStyle;
-  thumb: ImageStyle;
-  thumbRemove: ViewStyle;
-  thumbRemoveText: TextStyle;
-  miniHint: TextStyle;
+    chipsRow: { flexDirection: "row", gap: 8, paddingVertical: 2 },
+    chip: {
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: subtleBorder,
+      backgroundColor: subtleBg,
+    },
+    chipActive: {
+      backgroundColor: t.colors.primary,
+      borderColor: t.colors.primary,
+    },
+    chipText: { fontSize: 12, color: t.colors.text, fontFamily: FONT.medium },
+    chipTextActive: { color: "#fff", fontFamily: FONT.bold },
 
-  error: TextStyle;
-  delete: ViewStyle;
-  deleteText: TextStyle;
-  loadingText: TextStyle;
+    statusRow: { flexDirection: "row-reverse", gap: 10, flexWrap: "wrap" },
+    statusChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: subtleBorder,
+      backgroundColor: subtleBg,
+      minWidth: 92,
+      alignItems: "center",
+    },
+    statusChipActive: {
+      backgroundColor: "rgba(59,130,246,0.12)",
+      borderColor: "rgba(59,130,246,0.28)",
+    },
+    statusText: { fontSize: 12, fontFamily: FONT.bold, color: t.colors.text },
+    statusTextActive: { color: t.colors.primary },
 
-  pressed: ViewStyle;
-  disabled: ViewStyle;
-};
+    priceRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+    currencyPill: {
+      backgroundColor: t.colors.primary,
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 64,
+    },
+    currencyText: { color: "#fff", fontFamily: FONT.bold },
+    priceInput: { flex: 1 },
 
-const styles = StyleSheet.create<Styles>({
-  screen: { flex: 1, backgroundColor: THEME.white[100] },
-  container: { padding: 16, paddingBottom: 40 },
+    sectionHeaderRow: {
+      marginTop: 4,
+      marginBottom: 10,
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    sectionHint: {
+      textAlign: "right",
+      color: t.colors.primary,
+      fontFamily: FONT.bold,
+      fontSize: 13,
+      writingDirection: "rtl",
+    },
+    specToggle: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: "rgba(59,130,246,0.25)",
+      backgroundColor: "rgba(59,130,246,0.10)",
+    },
+    specToggleText: {
+      fontFamily: FONT.bold,
+      fontSize: 12,
+      color: t.colors.primary,
+    },
 
-  header: { paddingHorizontal: 2, marginBottom: 10 },
-  title: {
-    fontSize: 22,
-    color: THEME.dark[100],
-    textAlign: "right",
-    fontFamily: FONT.bold,
-  },
-  subtitle: {
-    fontSize: 13,
-    marginTop: 4,
-    color: THEME.gray[100],
-    textAlign: "right",
-    fontFamily: FONT.regular,
-  },
+    grid3: { flexDirection: "row-reverse", gap: 10 },
 
-  card: {
-    backgroundColor: THEME.white.DEFAULT,
-    borderRadius: 22,
-    padding: 14,
-    shadowColor: "#000000",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 3,
-  },
+    addImagesBtn: {
+      alignSelf: "flex-end",
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: "rgba(59,130,246,0.25)",
+      backgroundColor: "rgba(59,130,246,0.10)",
+    },
+    addImagesBtnText: {
+      fontFamily: FONT.bold,
+      fontSize: 12,
+      color: t.colors.primary,
+    },
 
-  imageWrap: {
-    borderRadius: 18,
-    backgroundColor: THEME.white[100],
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#E8E8E8",
-    position: "relative",
-    marginBottom: 12,
-  },
-  image: { width: "100%", aspectRatio: 16 / 9 },
-  imageOverlay: {
-    position: "absolute",
-    bottom: 10,
-    right: 10,
-    backgroundColor: THEME.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  imageOverlayText: {
-    color: THEME.white.DEFAULT,
-    fontSize: 12,
-    fontFamily: FONT.bold,
-  },
+    thumbsRow: { flexDirection: "row-reverse", gap: 10, paddingVertical: 4 },
+    thumbWrap: {
+      width: 86,
+      height: 86,
+      borderRadius: 14,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: subtleBorder,
+      backgroundColor: subtleBg,
+      position: "relative",
+    },
+    thumb: { width: "100%", height: "100%" },
+    thumbRemove: {
+      position: "absolute",
+      top: 6,
+      left: 6,
+      width: 22,
+      height: 22,
+      borderRadius: 999,
+      backgroundColor: "rgba(239,68,68,0.95)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    thumbRemoveText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
 
-  field: { marginBottom: 12 },
-  label: {
-    fontSize: 12,
-    marginBottom: 6,
-    color: THEME.dark[100],
-    textAlign: "right",
-    fontFamily: FONT.medium,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#E6E6E6",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: THEME.white[100],
-    borderRadius: 14,
-    fontSize: 15,
-    color: THEME.dark[100],
-    fontFamily: FONT.regular,
-  },
-  inputMultiline: {
-    minHeight: 110,
-    textAlignVertical: "top" as const,
-  },
-  inputRtl: { writingDirection: "rtl" as const },
+    miniHint: {
+      fontSize: 12,
+      color: t.colors.muted,
+      fontFamily: FONT.regular,
+      textAlign: "right",
+      writingDirection: "rtl",
+    },
 
-  chipsRow: { flexDirection: "row", gap: 8, paddingVertical: 2 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#E6E6E6",
-    backgroundColor: THEME.white[100],
-  },
-  chipActive: { backgroundColor: THEME.primary, borderColor: THEME.primary },
-  chipText: { fontSize: 12, color: THEME.dark[100], fontFamily: FONT.medium },
-  chipTextActive: { color: THEME.white.DEFAULT, fontFamily: FONT.bold },
+    error: {
+      color: t.colors.error,
+      textAlign: "right",
+      marginTop: 4,
+      fontFamily: FONT.medium,
+      writingDirection: "rtl",
+    },
 
-  statusRow: { flexDirection: "row-reverse", gap: 10, flexWrap: "wrap" },
-  statusChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.12)",
-    backgroundColor: "#fff",
-    minWidth: 92,
-    alignItems: "center",
-  },
-  statusChipActive: {
-    backgroundColor: "rgba(59,130,246,0.12)",
-    borderColor: "rgba(59,130,246,0.28)",
-  },
-  statusText: {
-    fontSize: 12,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-  },
-  statusTextActive: { color: THEME.primary },
+    delete: {
+      marginTop: 8,
+      paddingVertical: 12,
+      borderRadius: 16,
+      backgroundColor: t.colors.error,
+      alignItems: "center",
+    },
+    deleteText: { color: "#fff", fontFamily: FONT.bold },
 
-  priceRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  currencyPill: {
-    backgroundColor: THEME.primary,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 64,
-  },
-  currencyText: { color: THEME.white.DEFAULT, fontFamily: FONT.bold },
-  priceInput: { flex: 1 },
+    loadingText: {
+      textAlign: "right",
+      marginTop: 10,
+      fontStyle: "italic",
+      color: t.colors.muted,
+      fontFamily: FONT.regular,
+      writingDirection: "rtl",
+    },
 
-  sectionHeaderRow: {
-    marginTop: 4,
-    marginBottom: 10,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  sectionHint: {
-    textAlign: "right",
-    color: THEME.primary,
-    fontFamily: FONT.bold,
-    fontSize: 13,
-  },
-  specToggle: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(59,130,246,0.25)",
-    backgroundColor: "rgba(59,130,246,0.10)",
-  },
-  specToggleText: {
-    fontFamily: FONT.bold,
-    fontSize: 12,
-    color: THEME.primary,
-  },
-
-  grid3: { flexDirection: "row-reverse", gap: 10 },
-
-  addImagesBtn: {
-    alignSelf: "flex-end",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(59,130,246,0.25)",
-    backgroundColor: "rgba(59,130,246,0.10)",
-  },
-  addImagesBtnText: {
-    fontFamily: FONT.bold,
-    fontSize: 12,
-    color: THEME.primary,
-  },
-  thumbsRow: {
-    flexDirection: "row-reverse",
-    gap: 10,
-    paddingVertical: 4,
-  },
-  thumbWrap: {
-    width: 86,
-    height: 86,
-    borderRadius: 14,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.10)",
-    backgroundColor: THEME.white[100],
-    position: "relative",
-  },
-  thumb: { width: "100%", height: "100%" },
-  thumbRemove: {
-    position: "absolute",
-    top: 6,
-    left: 6,
-    width: 22,
-    height: 22,
-    borderRadius: 999,
-    backgroundColor: "rgba(239,68,68,0.95)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  thumbRemoveText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
-  miniHint: {
-    fontSize: 12,
-    color: THEME.gray[100],
-    fontFamily: FONT.regular,
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-
-  error: {
-    color: THEME.error,
-    textAlign: "right",
-    marginTop: 4,
-    fontFamily: FONT.medium,
-  },
-
-  delete: {
-    marginTop: 8,
-    paddingVertical: 12,
-    borderRadius: 100,
-    backgroundColor: THEME.error,
-    alignItems: "center",
-  },
-  deleteText: { color: THEME.white.DEFAULT, fontFamily: FONT.bold },
-
-  loadingText: {
-    textAlign: "right",
-    marginTop: 10,
-    fontStyle: "italic",
-    color: THEME.gray[100],
-    fontFamily: FONT.regular,
-  },
-
-  pressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
-  disabled: { opacity: 0.6 },
-});
+    pressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
+    disabled: { opacity: 0.6 },
+  });
+}

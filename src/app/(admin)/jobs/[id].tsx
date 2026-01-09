@@ -13,7 +13,7 @@ import {
 
 import { FONT } from "@/constants/Typography";
 import { useDeleteJob, useJob } from "@api/jobs";
-import { THEME } from "@constants/Colors";
+import { useAppTheme } from "@providers/AppThemeProvider";
 
 function formatDate(iso?: string | null) {
   if (!iso) return "";
@@ -27,6 +27,14 @@ function formatDate(iso?: string | null) {
 }
 
 export default function AdminJobDetails() {
+  const t = useAppTheme();
+  const isDark = t.scheme === "dark";
+
+  const subtleBorder = isDark
+    ? "rgba(255,255,255,0.10)"
+    : "rgba(15,23,42,0.10)";
+  const badgeBg = isDark ? "rgba(255,255,255,0.06)" : "rgba(59,130,246,0.08)";
+
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -65,11 +73,22 @@ export default function AdminJobDetails() {
 
   if (isLoading) {
     return (
-      <View style={styles.screen}>
-        <Stack.Screen options={{ title: "تفاصيل الوظيفة" }} />
+      <View style={[styles.screen, { backgroundColor: t.colors.bg }]}>
+        <Stack.Screen
+          options={{
+            title: "تفاصيل الوظيفة",
+            headerTitleAlign: "center",
+            headerShadowVisible: false,
+            headerStyle: { backgroundColor: t.colors.bg },
+            headerTitleStyle: { fontFamily: FONT.bold, color: t.colors.text },
+            headerTintColor: t.colors.text,
+          }}
+        />
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={THEME.primary} />
-          <Text style={styles.muted}>جاري التحميل…</Text>
+          <ActivityIndicator size="large" color={t.colors.primary} />
+          <Text style={[styles.muted, { color: t.colors.muted }]}>
+            جاري التحميل…
+          </Text>
         </View>
       </View>
     );
@@ -77,11 +96,22 @@ export default function AdminJobDetails() {
 
   if (error || !job) {
     return (
-      <View style={styles.screen}>
-        <Stack.Screen options={{ title: "تفاصيل الوظيفة" }} />
+      <View style={[styles.screen, { backgroundColor: t.colors.bg }]}>
+        <Stack.Screen
+          options={{
+            title: "تفاصيل الوظيفة",
+            headerTitleAlign: "center",
+            headerShadowVisible: false,
+            headerStyle: { backgroundColor: t.colors.bg },
+            headerTitleStyle: { fontFamily: FONT.bold, color: t.colors.text },
+            headerTintColor: t.colors.text,
+          }}
+        />
         <View style={styles.center}>
-          <Text style={styles.title}>مش لاقيين الوظيفة</Text>
-          <Text style={styles.muted}>
+          <Text style={[styles.title, { color: t.colors.text }]}>
+            مش لاقيين الوظيفة
+          </Text>
+          <Text style={[styles.muted, { color: t.colors.muted }]}>
             ممكن تكون اتحذفت أو في مشكلة بالتحميل.
           </Text>
 
@@ -89,6 +119,7 @@ export default function AdminJobDetails() {
             onPress={() => refetch()}
             style={({ pressed }) => [
               styles.primaryBtn,
+              { backgroundColor: t.colors.primary },
               pressed && { opacity: 0.9 },
             ]}
           >
@@ -100,45 +131,76 @@ export default function AdminJobDetails() {
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: t.colors.bg }]}>
       <Stack.Screen
-        options={{ title: "تفاصيل الوظيفة", headerTitleAlign: "center" }}
+        options={{
+          title: "تفاصيل الوظيفة",
+          headerTitleAlign: "center",
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: t.colors.bg },
+          headerTitleStyle: { fontFamily: FONT.bold, color: t.colors.text },
+          headerTintColor: t.colors.text,
+        }}
       />
 
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.card}>
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: t.colors.surface,
+              borderColor: t.colors.border ?? subtleBorder,
+            },
+          ]}
+        >
           <View style={styles.topRow}>
-            <Text style={styles.jobTitle}>{job.title}</Text>
+            <Text style={[styles.jobTitle, { color: t.colors.text }]}>
+              {job.title}
+            </Text>
           </View>
 
-          {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+          {meta ? (
+            <Text style={[styles.meta, { color: t.colors.muted }]}>{meta}</Text>
+          ) : null}
 
           <View style={styles.badgesRow}>
             {job.salary ? (
-              <View style={styles.badge}>
-                <FontAwesome name="money" size={14} color={THEME.primary} />
-                <Text style={styles.badgeText}>{job.salary}</Text>
+              <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+                <FontAwesome name="money" size={14} color={t.colors.primary} />
+                <Text style={[styles.badgeText, { color: t.colors.text }]}>
+                  {job.salary}
+                </Text>
               </View>
             ) : null}
 
             {job.created_at ? (
-              <View style={styles.badge}>
-                <FontAwesome name="calendar" size={14} color={THEME.primary} />
-                <Text style={styles.badgeText}>
+              <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+                <FontAwesome
+                  name="calendar"
+                  size={14}
+                  color={t.colors.primary}
+                />
+                <Text style={[styles.badgeText, { color: t.colors.text }]}>
                   {formatDate(job.created_at)}
                 </Text>
               </View>
             ) : null}
           </View>
 
-          <Text style={styles.sectionTitle}>الوصف</Text>
+          <Text style={[styles.sectionTitle, { color: t.colors.text }]}>
+            الوصف
+          </Text>
           {job.description ? (
-            <Text style={styles.desc}>{job.description}</Text>
+            <Text style={[styles.desc, { color: t.colors.text }]}>
+              {job.description}
+            </Text>
           ) : (
-            <Text style={styles.mutedRight}>لا يوجد وصف.</Text>
+            <Text style={[styles.mutedRight, { color: t.colors.muted }]}>
+              لا يوجد وصف.
+            </Text>
           )}
         </View>
 
@@ -147,6 +209,7 @@ export default function AdminJobDetails() {
             onPress={onEdit}
             style={({ pressed }) => [
               styles.primaryActionBtn,
+              { backgroundColor: t.colors.primary },
               pressed && { opacity: 0.9 },
             ]}
           >
@@ -159,6 +222,7 @@ export default function AdminJobDetails() {
             disabled={deleteMutation.isPending}
             style={({ pressed }) => [
               styles.dangerActionBtn,
+              { backgroundColor: t.colors.error },
               pressed && { opacity: 0.9 },
               deleteMutation.isPending && { opacity: 0.6 },
             ]}
@@ -173,7 +237,8 @@ export default function AdminJobDetails() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: THEME.white[100] },
+  screen: { flex: 1 },
+
   content: { padding: 12, paddingBottom: 18 },
 
   center: {
@@ -187,14 +252,12 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: FONT.bold,
     fontSize: 18,
-    color: THEME.dark[100],
     textAlign: "center",
   },
 
   muted: {
     fontFamily: FONT.regular,
     fontSize: 13,
-    color: THEME.gray[100],
     textAlign: "center",
     lineHeight: 18,
   },
@@ -202,15 +265,13 @@ const styles = StyleSheet.create({
   mutedRight: {
     fontFamily: FONT.regular,
     fontSize: 13,
-    color: THEME.gray[100],
     textAlign: "right",
     lineHeight: 18,
+    writingDirection: "rtl",
   },
 
   card: {
-    backgroundColor: THEME.white.DEFAULT,
     borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.08)",
     borderRadius: 16,
     padding: 14,
   },
@@ -227,16 +288,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: FONT.bold,
     fontSize: 18,
-    color: THEME.dark[100],
     textAlign: "right",
+    writingDirection: "rtl",
   },
 
   meta: {
     fontFamily: FONT.regular,
     fontSize: 13,
-    color: THEME.gray[100],
     textAlign: "right",
     marginBottom: 10,
+    writingDirection: "rtl",
   },
 
   badgesRow: {
@@ -253,29 +314,27 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: "#F2F7FF",
   },
 
   badgeText: {
     fontFamily: FONT.medium,
     fontSize: 12,
-    color: THEME.dark[100],
   },
 
   sectionTitle: {
     fontFamily: FONT.bold,
     fontSize: 14,
-    color: THEME.dark[100],
     textAlign: "right",
     marginBottom: 6,
+    writingDirection: "rtl",
   },
 
   desc: {
     fontFamily: FONT.regular,
     fontSize: 13,
-    color: THEME.dark[100],
     textAlign: "right",
     lineHeight: 20,
+    writingDirection: "rtl",
   },
 
   actionsRow: {
@@ -290,15 +349,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: THEME.primary,
     borderRadius: 14,
     paddingVertical: 12,
   },
-  primaryActionText: {
-    fontFamily: FONT.bold,
-    fontSize: 13,
-    color: "#fff",
-  },
+  primaryActionText: { fontFamily: FONT.bold, fontSize: 13, color: "#fff" },
 
   dangerActionBtn: {
     flex: 1,
@@ -306,28 +360,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: THEME.error,
     borderRadius: 14,
     paddingVertical: 12,
   },
-  dangerActionText: {
-    color: "#fff",
-    fontFamily: FONT.bold,
-    fontSize: 13,
-  },
+  dangerActionText: { color: "#fff", fontFamily: FONT.bold, fontSize: 13 },
 
   primaryBtn: {
     marginTop: 6,
     alignSelf: "stretch",
-    backgroundColor: THEME.primary,
     paddingVertical: 12,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  primaryBtnText: {
-    color: "#fff",
-    fontFamily: FONT.bold,
-    fontSize: 14,
-  },
+  primaryBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 14 },
 });

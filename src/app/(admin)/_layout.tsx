@@ -5,8 +5,8 @@ import { Platform, StyleSheet, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FONT } from "@/constants/Typography";
-import { useAuth } from "@providers/AuthProvider";
 import { useAppTheme } from "@providers/AppThemeProvider";
+import { useAuth } from "@providers/AuthProvider";
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>["name"];
@@ -29,15 +29,19 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+
         tabBarActiveTintColor: t.colors.primary,
         tabBarInactiveTintColor: t.colors.muted,
+
         tabBarLabelStyle: {
           fontFamily: FONT.medium,
           fontSize: 11,
           paddingTop: 2,
         },
+
         tabBarStyle: [
-          styles.tabBar,
+          styles.tabBarBase,
+          t.scheme === "dark" ? styles.tabBarDark : styles.tabBarLight,
           {
             backgroundColor: t.colors.tabBarBg,
             borderTopColor: t.colors.tabBarBorder,
@@ -71,9 +75,19 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    borderTopWidth: 1,
+  tabBarBase: {
+    borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 8,
+  },
+
+  tabBarDark: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+  },
+
+  tabBarLight: {
     shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 12,

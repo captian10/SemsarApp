@@ -1,21 +1,25 @@
 import { FONT } from "@/constants/Typography";
-import { THEME } from "@constants/Colors";
 import { FontAwesome } from "@expo/vector-icons";
 import { Link, Stack } from "expo-router";
 import React from "react";
 import { Pressable } from "react-native";
 
+import { useAppTheme } from "@providers/AppThemeProvider";
+
 export default function HomeStack() {
+  const t = useAppTheme();
+
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: THEME.white.DEFAULT },
+        headerStyle: { backgroundColor: t.colors.bg },
         headerShadowVisible: false,
         headerTitleAlign: "center",
+        headerTintColor: t.colors.text, // back button + icons default
         headerTitleStyle: {
           fontFamily: FONT.bold,
           fontSize: 18,
-          color: THEME.dark[100],
+          color: t.colors.text,
         },
       }}
     >
@@ -35,7 +39,7 @@ export default function HomeStack() {
                 <FontAwesome
                   name="plus-square-o"
                   size={24}
-                  color={THEME.primary}
+                  color={t.colors.primary}
                 />
               </Pressable>
             </Link>

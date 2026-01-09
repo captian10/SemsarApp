@@ -35,8 +35,8 @@ export const lightTheme: AppTheme = {
 export const darkTheme: AppTheme = {
   scheme: "dark",
   colors: {
-    bg: "#0A0A0A",          
-    surface: "#121212",     
+    bg: "#000000",          
+    surface: "#0B0B0C",     
     text: "#F5F5F5",        
     muted: "#A3A3A3",       
     border: "rgba(255,255,255,0.10)",
@@ -44,7 +44,7 @@ export const darkTheme: AppTheme = {
     primary: "#3B82F6",
     error: "#EF4444",
 
-    tabBarBg: "#0A0A0A",
+    tabBarBg: "#050506",
     tabBarBorder: "rgba(255,255,255,0.10)",
   },
 };
