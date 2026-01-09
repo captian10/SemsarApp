@@ -1,133 +1,70 @@
-import { useOrderDetails } from "@api/favorites";
-import { useUpdateOrderSubscription } from "@api/jobs/subscription";
-import OrderItemListItem from "@components/RequestItemListItem";
-import OrderListItem from "@components/RequestListItem";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { FONT } from "@/constants/Typography";
 import { THEME } from "@constants/Colors";
 
-export default function OrderDetailsScreen() {
-  const params = useLocalSearchParams();
+export default function FavoriteDetailsScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
 
-  // ✅ safer parsing for id
   const id = useMemo(() => {
     const raw = Array.isArray(params?.id) ? params.id[0] : params?.id;
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : 0;
+    return typeof raw === "string" ? raw.trim() : "";
   }, [params?.id]);
-
-  const { data: order, isLoading, error } = useOrderDetails(id);
-
-  // ✅ keep hook call stable (make sure your hook handles id=0 safely)
-  useUpdateOrderSubscription(id);
 
   if (!id) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.centerTitle}>رقم طلب غير صالح</Text>
-        <Text style={styles.centerSub}>ارجع وحاول تفتح الطلب مرة تانية</Text>
+      <View style={styles.screen}>
+        <Stack.Screen options={{ title: "المفضلة" }} />
+        <View style={styles.center}>
+          <Text style={styles.title}>معرّف غير صالح</Text>
+          <Text style={styles.sub}>
+            ارجع وافتح الإعلان من المفضلة مرة تانية.
+          </Text>
+          <Pressable onPress={() => router.back()} style={styles.btn}>
+            <Text style={styles.btnText}>رجوع</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
-  if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={THEME.primary} />
-        <Text style={styles.centerTitle}>جاري تحميل الطلب…</Text>
-        <Text style={styles.centerSub}>لحظة واحدة</Text>
-      </View>
-    );
-  }
-
-  if (error || !order) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.centerTitle}>فشل في جلب بيانات الطلب</Text>
-        <Text style={styles.centerSub}>تأكد من الاتصال وحاول مرة أخرى</Text>
-      </View>
-    );
-  }
-
-  const items = Array.isArray((order as any)?.order_items)
-    ? ((order as any).order_items as any[])
-    : [];
-
-  return (
-    <View style={styles.screen}>
-      <Stack.Screen
-        options={{
-          title: `طلب #${id}`,
-          headerTitleStyle: {
-            fontFamily: FONT.bold,
-            fontSize: 16,
-          },
-        }}
-      />
-
-      <FlatList
-        data={items}
-        keyExtractor={(item: any, idx) => String(item?.id ?? idx)}
-        renderItem={({ item }) => <OrderItemListItem item={item} />}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={() => <OrderListItem order={order as any} />}
-        ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>لا توجد عناصر في هذا الطلب</Text>
-          </View>
-        }
-        showsVerticalScrollIndicator={false}
-      />
-    </View>
-  );
+  return <Redirect href={{ pathname: "/(user)/home/[id]", params: { id } }} />;
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    padding: 12,
-    backgroundColor: THEME.white[100],
-  },
-  listContent: {
-    gap: 10,
-    paddingBottom: 16,
-  },
+  screen: { flex: 1, backgroundColor: THEME.white[100] },
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 8,
     padding: 16,
-    backgroundColor: THEME.white[100],
   },
-  centerTitle: {
+  title: {
     fontFamily: FONT.bold,
-    fontSize: 14,
+    fontSize: 16,
     color: THEME.dark[100],
     textAlign: "center",
   },
-  centerSub: {
+  sub: {
     fontFamily: FONT.regular,
     fontSize: 12,
     color: THEME.gray[100],
     textAlign: "center",
   },
-  emptyBox: {
-    paddingVertical: 20,
-    alignItems: "center",
+  btn: {
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: THEME.primary,
   },
-  emptyText: {
-    fontFamily: FONT.medium,
-    color: THEME.gray[100],
-    textAlign: "center",
+  btnText: {
+    color: "#fff",
+    fontFamily: FONT.bold,
+    fontSize: 13,
   },
 });

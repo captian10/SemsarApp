@@ -1,14 +1,21 @@
-import React, { ComponentProps, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  ComponentProps,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Image } from "react-native";
 import { supabase } from "../lib/supabase";
 
 type RemoteImageProps = {
   path?: string | null;
   fallback: string;
-  bucket?: string; // default: property-images (public)
+  bucket?: string;
 } & Omit<ComponentProps<typeof Image>, "source">;
 
-const isHttpUrl = (v: string) => v.startsWith("http://") || v.startsWith("https://");
+const isHttpUrl = (v: string) =>
+  v.startsWith("http://") || v.startsWith("https://");
 const isLocalFile = (v: string) => v.startsWith("file://");
 
 export default function RemoteImage({
@@ -22,8 +29,14 @@ export default function RemoteImage({
   const reqIdRef = useRef(0);
 
   const normalizedPath = useMemo(() => String(path ?? "").trim(), [path]);
-  const fullUrl = useMemo(() => (normalizedPath ? isHttpUrl(normalizedPath) : false), [normalizedPath]);
-  const localFile = useMemo(() => (normalizedPath ? isLocalFile(normalizedPath) : false), [normalizedPath]);
+  const fullUrl = useMemo(
+    () => (normalizedPath ? isHttpUrl(normalizedPath) : false),
+    [normalizedPath]
+  );
+  const localFile = useMemo(
+    () => (normalizedPath ? isLocalFile(normalizedPath) : false),
+    [normalizedPath]
+  );
 
   useEffect(() => {
     const reqId = ++reqIdRef.current;
@@ -35,7 +48,6 @@ export default function RemoteImage({
       setUri(next);
     };
 
-    // no path => fallback
     if (!normalizedPath) {
       safeSetUri(fallback);
       return () => {
@@ -43,7 +55,6 @@ export default function RemoteImage({
       };
     }
 
-    // full url or local file => use directly
     if (fullUrl || localFile) {
       safeSetUri(normalizedPath);
       return () => {
@@ -51,7 +62,6 @@ export default function RemoteImage({
       };
     }
 
-    // public bucket => public url
     const { data } = supabase.storage.from(bucket).getPublicUrl(normalizedPath);
     safeSetUri(data?.publicUrl || fallback);
 
@@ -65,7 +75,7 @@ export default function RemoteImage({
       source={{ uri }}
       {...imageProps}
       onError={(e) => {
-        setUri(fallback); // if object missing / bad url
+        setUri(fallback);
         onError?.(e);
       }}
     />
