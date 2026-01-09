@@ -15,6 +15,7 @@ import {
 import { FONT } from "@/constants/Typography";
 import { useJob } from "@api/jobs";
 import { THEME } from "@constants/Colors";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 function formatDate(iso?: string | null) {
   if (!iso) return "";
@@ -96,7 +97,7 @@ export default function JobDetailsScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <SafeAreaView style={styles.screen}>
       <Stack.Screen
         options={{ title: "تفاصيل الوظيفة", headerTitleAlign: "center" }}
       />
@@ -151,7 +152,7 @@ export default function JobDetailsScreen() {
 
         {/* ✅ removed رجوع button at bottom */}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

@@ -12,7 +12,7 @@ import {
 } from "react-native";
 
 import { FONT } from "@/constants/Typography";
-import { useDeleteJob, useJob, useToggleJobActive } from "@api/jobs";
+import { useDeleteJob, useJob } from "@api/jobs";
 import { THEME } from "@constants/Colors";
 
 function formatDate(iso?: string | null) {
@@ -31,7 +31,6 @@ export default function AdminJobDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: job, isLoading, error, refetch } = useJob(id);
-  const toggleMutation = useToggleJobActive();
   const deleteMutation = useDeleteJob();
 
   const meta = useMemo(() => {
@@ -42,11 +41,6 @@ export default function AdminJobDetails() {
 
   const onEdit = () => {
     router.push(`/(admin)/jobs/create?id=${id}`);
-  };
-
-  const onToggle = () => {
-    if (!job) return;
-    toggleMutation.mutate({ id: job.id, is_active: !job.is_active });
   };
 
   const onDelete = () => {
@@ -87,11 +81,16 @@ export default function AdminJobDetails() {
         <Stack.Screen options={{ title: "تفاصيل الوظيفة" }} />
         <View style={styles.center}>
           <Text style={styles.title}>مش لاقيين الوظيفة</Text>
-          <Text style={styles.muted}>ممكن تكون اتحذفت أو في مشكلة بالتحميل.</Text>
+          <Text style={styles.muted}>
+            ممكن تكون اتحذفت أو في مشكلة بالتحميل.
+          </Text>
 
           <Pressable
             onPress={() => refetch()}
-            style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.9 }]}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              pressed && { opacity: 0.9 },
+            ]}
           >
             <Text style={styles.primaryBtnText}>تحديث</Text>
           </Pressable>
@@ -102,13 +101,17 @@ export default function AdminJobDetails() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: "تفاصيل الوظيفة", headerTitleAlign: "center" }} />
+      <Stack.Screen
+        options={{ title: "تفاصيل الوظيفة", headerTitleAlign: "center" }}
+      />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.card}>
           <View style={styles.topRow}>
             <Text style={styles.jobTitle}>{job.title}</Text>
-            <View style={[styles.dot, job.is_active ? styles.dotOn : styles.dotOff]} />
           </View>
 
           {meta ? <Text style={styles.meta}>{meta}</Text> : null}
@@ -124,7 +127,9 @@ export default function AdminJobDetails() {
             {job.created_at ? (
               <View style={styles.badge}>
                 <FontAwesome name="calendar" size={14} color={THEME.primary} />
-                <Text style={styles.badgeText}>{formatDate(job.created_at)}</Text>
+                <Text style={styles.badgeText}>
+                  {formatDate(job.created_at)}
+                </Text>
               </View>
             ) : null}
           </View>
@@ -137,48 +142,31 @@ export default function AdminJobDetails() {
           )}
         </View>
 
-        {/* Actions */}
         <View style={styles.actionsRow}>
-          {/* ✅ Edit = Primary */}
           <Pressable
             onPress={onEdit}
-            style={({ pressed }) => [styles.primaryActionBtn, pressed && { opacity: 0.9 }]}
+            style={({ pressed }) => [
+              styles.primaryActionBtn,
+              pressed && { opacity: 0.9 },
+            ]}
           >
             <FontAwesome name="edit" size={14} color="#fff" />
             <Text style={styles.primaryActionText}>تعديل</Text>
           </Pressable>
 
-          {/* ✅ Toggle = Outline */}
           <Pressable
-            onPress={onToggle}
-            disabled={toggleMutation.isPending}
+            onPress={onDelete}
+            disabled={deleteMutation.isPending}
             style={({ pressed }) => [
-              styles.outlineBtn,
+              styles.dangerActionBtn,
               pressed && { opacity: 0.9 },
-              toggleMutation.isPending && { opacity: 0.6 },
+              deleteMutation.isPending && { opacity: 0.6 },
             ]}
           >
-            <FontAwesome
-              name={job.is_active ? "eye-slash" : "eye"}
-              size={14}
-              color={THEME.dark[100]}
-            />
-            <Text style={styles.outlineText}>{job.is_active ? "إخفاء" : "إظهار"}</Text>
+            <FontAwesome name="trash" size={14} color="#fff" />
+            <Text style={styles.dangerActionText}>حذف</Text>
           </Pressable>
         </View>
-
-        <Pressable
-          onPress={onDelete}
-          disabled={deleteMutation.isPending}
-          style={({ pressed }) => [
-            styles.dangerBtn,
-            pressed && { opacity: 0.9 },
-            deleteMutation.isPending && { opacity: 0.6 },
-          ]}
-        >
-          <FontAwesome name="trash" size={14} color="#fff" />
-          <Text style={styles.dangerText}>حذف</Text>
-        </Pressable>
       </ScrollView>
     </View>
   );
@@ -290,10 +278,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  dot: { width: 10, height: 10, borderRadius: 999, marginTop: 6 },
-  dotOn: { backgroundColor: "#16A34A" },
-  dotOff: { backgroundColor: "#9CA3AF" },
-
   actionsRow: {
     marginTop: 12,
     flexDirection: "row-reverse",
@@ -316,26 +300,8 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 
-  outlineBtn: {
+  dangerActionBtn: {
     flex: 1,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.12)",
-    borderRadius: 14,
-    paddingVertical: 12,
-  },
-  outlineText: {
-    fontFamily: FONT.bold,
-    fontSize: 13,
-    color: THEME.dark[100],
-  },
-
-  dangerBtn: {
-    marginTop: 10,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
@@ -344,7 +310,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 12,
   },
-  dangerText: {
+  dangerActionText: {
     color: "#fff",
     fontFamily: FONT.bold,
     fontSize: 13,

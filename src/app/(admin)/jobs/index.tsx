@@ -1,3 +1,5 @@
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,12 +12,10 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
 
-import { THEME } from "@constants/Colors";
 import { FONT } from "@/constants/Typography";
-import { useAdminJobs, useDeleteJob, useToggleJobActive, type Job } from "@api/jobs";
+import { useAdminJobs, useDeleteJob, type Job } from "@api/jobs";
+import { THEME } from "@constants/Colors";
 
 function formatDate(iso?: string | null) {
   if (!iso) return "";
@@ -32,13 +32,11 @@ function JobAdminCard({
   job,
   onOpen,
   onEdit,
-  onToggle,
   onDelete,
 }: {
   job: Job;
   onOpen: () => void;
   onEdit: () => void;
-  onToggle: () => void;
   onDelete: () => void;
 }) {
   const metaParts = [job.company, job.location].filter(Boolean) as string[];
@@ -50,7 +48,6 @@ function JobAdminCard({
     >
       <View style={styles.cardTopRow}>
         <View style={styles.titleRow}>
-          <View style={[styles.dot, job.is_active ? styles.dotOn : styles.dotOff]} />
           <Text style={styles.jobTitle} numberOfLines={2}>
             {job.title}
           </Text>
@@ -66,43 +63,29 @@ function JobAdminCard({
       ) : null}
 
       <View style={styles.actionsRow}>
-        {/* ✅ Edit = Primary */}
         <Pressable
           onPress={(e) => {
             e.stopPropagation();
             onEdit();
           }}
-          style={({ pressed }) => [styles.primarySmallBtn, pressed && { opacity: 0.9 }]}
+          style={({ pressed }) => [
+            styles.primarySmallBtn,
+            pressed && { opacity: 0.9 },
+          ]}
         >
           <FontAwesome name="edit" size={13} color="#fff" />
           <Text style={styles.primarySmallText}>تعديل</Text>
         </Pressable>
 
-        {/* ✅ Toggle = Outline */}
-        <Pressable
-          onPress={(e) => {
-            e.stopPropagation();
-            onToggle();
-          }}
-          style={({ pressed }) => [styles.outlineSmallBtn, pressed && { opacity: 0.9 }]}
-        >
-          <FontAwesome
-            name={job.is_active ? "eye-slash" : "eye"}
-            size={13}
-            color={THEME.dark[100]}
-          />
-          <Text style={styles.outlineSmallText}>
-            {job.is_active ? "إخفاء" : "إظهار"}
-          </Text>
-        </Pressable>
-
-        {/* ✅ Delete = Danger */}
         <Pressable
           onPress={(e) => {
             e.stopPropagation();
             onDelete();
           }}
-          style={({ pressed }) => [styles.dangerSmallBtn, pressed && { opacity: 0.9 }]}
+          style={({ pressed }) => [
+            styles.dangerSmallBtn,
+            pressed && { opacity: 0.9 },
+          ]}
         >
           <FontAwesome name="trash" size={13} color="#fff" />
           <Text style={styles.dangerSmallText}>حذف</Text>
@@ -116,7 +99,6 @@ export default function AdminJobsIndex() {
   const router = useRouter();
 
   const { data, isLoading, isFetching, error, refetch } = useAdminJobs();
-  const toggleMutation = useToggleJobActive();
   const deleteMutation = useDeleteJob();
 
   const [q, setQ] = useState("");
@@ -133,10 +115,6 @@ export default function AdminJobsIndex() {
       return hay.includes(query);
     });
   }, [data, q]);
-
-  const onToggle = (job: Job) => {
-    toggleMutation.mutate({ id: job.id, is_active: !job.is_active });
-  };
 
   const onDelete = (job: Job) => {
     Alert.alert("تأكيد الحذف", "هل أنت متأكد أنك تريد حذف هذه الوظيفة؟", [
@@ -168,7 +146,10 @@ export default function AdminJobsIndex() {
           <Text style={styles.error}>حصل خطأ في تحميل الوظائف</Text>
           <Pressable
             onPress={() => refetch()}
-            style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.9 }]}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              pressed && { opacity: 0.9 },
+            ]}
           >
             <Text style={styles.primaryBtnText}>إعادة المحاولة</Text>
           </Pressable>
@@ -179,7 +160,6 @@ export default function AdminJobsIndex() {
 
   return (
     <View style={styles.screen}>
-      {/* Top controls */}
       <View style={styles.topRow}>
         <Pressable
           onPress={() => router.push("/(admin)/jobs/create")}
@@ -192,7 +172,6 @@ export default function AdminJobsIndex() {
         <View style={{ flex: 1 }} />
       </View>
 
-      {/* Search */}
       <View style={styles.searchWrap}>
         <FontAwesome name="search" size={14} color={THEME.gray[100]} />
         <TextInput
@@ -205,7 +184,6 @@ export default function AdminJobsIndex() {
         />
       </View>
 
-      {/* Stats (simple) */}
       <View style={styles.statsRow}>
         <Text style={styles.statText}>العدد: {list.length}</Text>
       </View>
@@ -218,12 +196,14 @@ export default function AdminJobsIndex() {
             job={item}
             onOpen={() => router.push(`/(admin)/jobs/${item.id}`)}
             onEdit={() => router.push(`/(admin)/jobs/create?id=${item.id}`)}
-            onToggle={() => onToggle(item)}
             onDelete={() => onDelete(item)}
           />
         )}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        contentContainerStyle={[styles.listContent, list.length === 0 && styles.listEmpty]}
+        contentContainerStyle={[
+          styles.listContent,
+          list.length === 0 && styles.listEmpty,
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={!!isFetching}
@@ -388,14 +368,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-  },
-  dotOn: { backgroundColor: "#16A34A" },
-  dotOff: { backgroundColor: "#9CA3AF" },
-
   jobTitle: {
     flex: 1,
     fontFamily: FONT.bold,
@@ -437,24 +409,6 @@ const styles = StyleSheet.create({
   },
   primarySmallText: {
     color: "#fff",
-    fontFamily: FONT.bold,
-    fontSize: 12,
-  },
-
-  outlineSmallBtn: {
-    flex: 1,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.12)",
-    paddingVertical: 10,
-    borderRadius: 14,
-  },
-  outlineSmallText: {
-    color: THEME.dark[100],
     fontFamily: FONT.bold,
     fontSize: 12,
   },

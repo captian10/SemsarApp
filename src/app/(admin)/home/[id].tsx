@@ -1,10 +1,8 @@
-// src/app/(admin)/home/[id].tsx
-// ✅ Admin Property Details Screen (Multi images gallery + actions next to each other)
-
 import { useDeleteProperty, useProperty } from "@api/properties";
 import { usePropertyContact } from "@api/property-contacts";
 import { usePropertyImages } from "@api/property-images";
 
+import { defaultPropertyImage } from "@components/PropertyCard";
 import RemoteImage from "@components/RemoteImage";
 import { FontAwesome } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
@@ -28,7 +26,6 @@ import {
 
 import { FONT } from "@/constants/Typography";
 import { THEME } from "@constants/Colors";
-import { defaultPropertyImage } from "../../../components/PropertyCard";
 
 const statusLabels: Record<string, string> = {
   available: "متاح",
@@ -56,10 +53,8 @@ export default function AdminPropertyDetailsScreen() {
   const { data: property, error, isLoading, refetch } = useProperty(id);
   const { mutate: deleteProperty, isPending: isDeleting } = useDeleteProperty();
 
-  // ✅ contact info (Admin-only by RLS)
   const { data: contact } = usePropertyContact(id);
 
-  // ✅ images from table (MOST reliable)
   const {
     data: imagesRows,
     refetch: refetchImages,
@@ -102,12 +97,10 @@ export default function AdminPropertyDetailsScreen() {
         ? [cover]
         : [defaultPropertyImage];
 
-    // normalize to objects for FlatList
     return list.map((url) => ({ url }));
   }, [imagesRows, property?.cover_image]);
 
   const cardW = useMemo(() => {
-    // نفس padding بتاع content: 16 يمين + 16 شمال
     return Math.max(W - 32, 1);
   }, [W]);
 
@@ -164,6 +157,7 @@ export default function AdminPropertyDetailsScreen() {
     () => safeText(contact?.owner_phone, ""),
     [contact]
   );
+
   const hasOwner = useMemo(
     () => Boolean(ownerName.trim() || ownerPhone.trim()),
     [ownerName, ownerPhone]
@@ -284,7 +278,6 @@ export default function AdminPropertyDetailsScreen() {
           />
         }
       >
-        {/* ✅ Gallery Card */}
         <View style={[styles.imageCard, { width: cardW }]}>
           <FlatList
             data={images}
@@ -315,13 +308,11 @@ export default function AdminPropertyDetailsScreen() {
             })}
           />
 
-          {/* ✅ price badge */}
           <View style={styles.badge}>
             <Text style={styles.badgePrice}>{priceText}</Text>
             <Text style={styles.badgeCurrency}>{currencyText}</Text>
           </View>
 
-          {/* ✅ counter */}
           {images.length > 1 && (
             <View style={styles.counterPill} pointerEvents="none">
               <Text style={styles.counterText}>
@@ -330,7 +321,6 @@ export default function AdminPropertyDetailsScreen() {
             </View>
           )}
 
-          {/* ✅ dots */}
           {images.length > 1 && (
             <View style={styles.dots} pointerEvents="none">
               {images.map((_, i) => (
@@ -343,7 +333,6 @@ export default function AdminPropertyDetailsScreen() {
           )}
         </View>
 
-        {/* Info */}
         <View style={styles.info}>
           <Text style={styles.title} numberOfLines={2}>
             {property.title}
@@ -381,7 +370,6 @@ export default function AdminPropertyDetailsScreen() {
           <Text style={styles.sectionTitle}>المواصفات</Text>
           <Text style={styles.sub}>{specsText}</Text>
 
-          {/* ✅ Owner contact (Admin only) */}
           {hasOwner && (
             <>
               <Text style={styles.sectionTitle}>صاحب العقار</Text>
@@ -448,7 +436,6 @@ export default function AdminPropertyDetailsScreen() {
             يمكنك تعديل العقار من زر القلم بالأعلى.
           </Text>
 
-          {/* ✅ Buttons next to each other */}
           <View style={styles.actions}>
             <Pressable
               onPress={() =>
@@ -582,7 +569,6 @@ const styles = StyleSheet.create<Styles>({
     borderColor: "rgba(59,130,246,0.18)",
   },
 
-  // ✅ Gallery card (no inner padding + overflow hidden)
   imageCard: {
     position: "relative",
     alignSelf: "center",
@@ -597,7 +583,6 @@ const styles = StyleSheet.create<Styles>({
     shadowOffset: { width: 0, height: 10 },
     elevation: 3,
   },
-  // ✅ square images
   image: { width: "100%", aspectRatio: 1 } as ImageStyle,
 
   badge: {
@@ -607,9 +592,9 @@ const styles = StyleSheet.create<Styles>({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(59,130,246,0.12)",
+    backgroundColor: THEME.white[100],
     borderWidth: 1,
-    borderColor: "rgba(59,130,246,0.24)",
+    borderColor: THEME.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
@@ -733,11 +718,7 @@ const styles = StyleSheet.create<Styles>({
     justifyContent: "space-between",
     gap: 12,
   },
-  ownerLabel: {
-    fontSize: 12,
-    fontFamily: FONT.medium,
-    color: THEME.gray[100],
-  },
+  ownerLabel: { fontSize: 12, fontFamily: FONT.medium, color: THEME.gray[100] },
   ownerValue: {
     fontSize: 14,
     fontFamily: FONT.bold,

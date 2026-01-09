@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -22,7 +21,6 @@ type FormState = {
   location: string;
   salary: string;
   description: string;
-  is_active: boolean;
 };
 
 const emptyForm: FormState = {
@@ -31,7 +29,6 @@ const emptyForm: FormState = {
   location: "",
   salary: "",
   description: "",
-  is_active: true,
 };
 
 export default function AdminJobCreateOrEdit() {
@@ -47,7 +44,6 @@ export default function AdminJobCreateOrEdit() {
 
   const [form, setForm] = useState<FormState>(emptyForm);
 
-  // Fill form when editing
   useEffect(() => {
     if (!isEdit) return;
     if (!job) return;
@@ -58,7 +54,6 @@ export default function AdminJobCreateOrEdit() {
       location: job.location ?? "",
       salary: job.salary ?? "",
       description: job.description ?? "",
-      is_active: !!job.is_active,
     });
   }, [isEdit, job]);
 
@@ -87,7 +82,7 @@ export default function AdminJobCreateOrEdit() {
       location: form.location.trim() || null,
       salary: form.salary.trim() || null,
       description: form.description.trim() || null,
-      is_active: form.is_active,
+      is_active: true,
     };
 
     try {
@@ -108,7 +103,6 @@ export default function AdminJobCreateOrEdit() {
     }
   };
 
-  // When editing, show loading while fetching job
   if (isEdit && isLoadingJob) {
     return (
       <View style={styles.screen}>
@@ -186,7 +180,7 @@ export default function AdminJobCreateOrEdit() {
               <TextInput
                 value={form.location}
                 onChangeText={(t) => setField("location", t)}
-                placeholder="مثال: القاهرة"
+                placeholder="مثال: قنا"
                 placeholderTextColor={THEME.gray[100]}
                 style={styles.input}
                 textAlign="right"
@@ -214,16 +208,6 @@ export default function AdminJobCreateOrEdit() {
             textAlign="right"
             multiline
           />
-
-          <View style={styles.toggleRow}>
-            <Text style={styles.toggleLabel}>إظهار الوظيفة للمستخدمين</Text>
-            <Switch
-              value={form.is_active}
-              onValueChange={(v) => setField("is_active", v)}
-              trackColor={{ false: "#E5E7EB", true: "#BBD7FF" }}
-              thumbColor={form.is_active ? THEME.primary : "#9CA3AF"}
-            />
-          </View>
         </View>
 
         <Pressable
@@ -250,12 +234,6 @@ export default function AdminJobCreateOrEdit() {
         >
           <Text style={styles.secondaryBtnText}>إلغاء</Text>
         </Pressable>
-
-        {!isEdit ? (
-          <Text style={styles.note}>
-            * بعد النشر، المستخدمين هيشوفوا الوظيفة لو كانت “مفعّل”.
-          </Text>
-        ) : null}
       </ScrollView>
     </View>
   );
@@ -333,24 +311,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
-  toggleRow: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(15, 23, 42, 0.08)",
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-
-  toggleLabel: {
-    fontFamily: FONT.medium,
-    fontSize: 13,
-    color: THEME.dark[100],
-    textAlign: "right",
-  },
-
   primaryBtn: {
     marginTop: 12,
     backgroundColor: THEME.primary,
@@ -379,13 +339,5 @@ const styles = StyleSheet.create({
     color: THEME.dark[100],
     fontFamily: FONT.bold,
     fontSize: 14,
-  },
-
-  note: {
-    marginTop: 10,
-    fontFamily: FONT.regular,
-    fontSize: 11,
-    color: THEME.gray[100],
-    textAlign: "center",
   },
 });

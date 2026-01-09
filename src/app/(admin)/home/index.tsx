@@ -23,6 +23,7 @@ import {
 type PropertyType = (typeof PROPERTY_TYPES)[number];
 type FilterType = "الكل" | PropertyType;
 type Sort = "latest" | "price_asc" | "price_desc";
+type ViewMode = "grid" | "list";
 
 const normalize = (v: unknown) =>
   String(v ?? "")
@@ -46,13 +47,13 @@ function applyFilters(args: {
 }) {
   const { list, type, query, sort } = args;
 
-  // 1) type
   const typeFiltered =
     type === "الكل"
       ? list
-      : list.filter((p: any) => normalize(p?.property_type) === normalize(type));
+      : list.filter(
+          (p: any) => normalize(p?.property_type) === normalize(type)
+        );
 
-  // 2) search
   const q = normalize(query);
   const searched =
     q.length === 0
@@ -64,7 +65,6 @@ function applyFilters(args: {
           return title.includes(q) || city.includes(q) || address.includes(q);
         });
 
-  // 3) sort
   const sorted = [...searched].sort((a: any, b: any) => {
     if (sort === "latest") {
       const da = new Date(a?.created_at ?? 0).getTime();
@@ -83,16 +83,16 @@ function applyFilters(args: {
 export default function HomeScreen() {
   const { data, error, isLoading, isFetching, refetch } = usePropertyList();
 
-  // UI state
   const [type, setType] = useState<FilterType>("الكل");
   const [sort, setSort] = useState<Sort>("latest");
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 250);
 
-  // sheet
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const numColumns = viewMode === "grid" ? 2 : 1;
+
   const [filterOpen, setFilterOpen] = useState(false);
 
-  // temporary (for sheet)
   const [tmpType, setTmpType] = useState<FilterType>(type);
   const [tmpSort, setTmpSort] = useState<Sort>(sort);
 
@@ -138,7 +138,11 @@ export default function HomeScreen() {
         <View style={styles.topBar}>
           <View style={styles.searchCard}>
             <View style={styles.searchWrap}>
-              <FontAwesome name="search" size={14} color="rgba(15,23,42,0.45)" />
+              <FontAwesome
+                name="search"
+                size={14}
+                color="rgba(15,23,42,0.45)"
+              />
               <Text style={styles.searchPlaceholder}>ابحث…</Text>
             </View>
           </View>
@@ -153,124 +157,171 @@ export default function HomeScreen() {
     );
   }
 
-  return (
-    <View style={styles.screen}>
-      {/* Top bar: Search + Filter */}
-      <View style={styles.topBar}>
-        <View style={styles.searchCard}>
-          <View style={styles.searchRow}>
-            {/* Search */}
-            <View style={styles.searchWrap}>
-              <FontAwesome name="search" size={14} color="rgba(15,23,42,0.45)" />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="ابحث بالعنوان / المدينة / العنوان التفصيلي"
-                placeholderTextColor={"rgba(15,23,42,0.35)"}
-                style={styles.searchInput}
-              />
-              {!!query && (
-                <Pressable
-                  onPress={() => setQuery("")}
-                  style={({ pressed }) => [
-                    styles.iconBtn,
-                    pressed && styles.pressed,
-                  ]}
-                  hitSlop={10}
-                >
-                  <FontAwesome
-                    name="times"
-                    size={12}
-                    color="rgba(15,23,42,0.55)"
-                  />
-                </Pressable>
-              )}
-            </View>
+  const Header = (
+    <View style={styles.topBar}>
+      <View style={styles.searchCard}>
+        <View style={styles.searchRow}>
+          <View style={styles.searchWrap}>
+            <FontAwesome name="search" size={14} color="rgba(15,23,42,0.45)" />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="ابحث"
+              placeholderTextColor={"rgba(15,23,42,0.35)"}
+              style={styles.searchInput}
+            />
+            {!!query && (
+              <Pressable
+                onPress={() => setQuery("")}
+                style={({ pressed }) => [
+                  styles.iconBtn,
+                  pressed && styles.pressed,
+                ]}
+                hitSlop={10}
+              >
+                <FontAwesome
+                  name="times"
+                  size={12}
+                  color="rgba(15,23,42,0.55)"
+                />
+              </Pressable>
+            )}
+          </View>
 
-            {/* Filter button */}
+          <Pressable
+            onPress={openSheet}
+            style={({ pressed }) => [
+              styles.filterBtn,
+              filtersActive && styles.filterBtnActive,
+              pressed && styles.pressed,
+            ]}
+            hitSlop={10}
+          >
+            <FontAwesome
+              name="sliders"
+              size={14}
+              color={filtersActive ? "#fff" : THEME.dark[100]}
+            />
+          </Pressable>
+        </View>
+
+        <View style={styles.metaRow}>
+          <Text style={styles.metaText} numberOfLines={1}>
+            {sortLabel}
+            {type !== "الكل" ? ` • ${type}` : ""}
+            {filtersActive ? ` • ${filtered.length} نتيجة` : ""}
+          </Text>
+
+          <View style={styles.viewToggle}>
             <Pressable
-              onPress={openSheet}
+              onPress={() => setViewMode("grid")}
               style={({ pressed }) => [
-                styles.filterBtn,
-                filtersActive && styles.filterBtnActive,
+                styles.viewBtn,
+                viewMode === "grid" && styles.viewBtnActive,
                 pressed && styles.pressed,
               ]}
               hitSlop={10}
             >
               <FontAwesome
-                name="sliders"
-                size={14}
-                color={filtersActive ? "#fff" : THEME.dark[100]}
+                name="th-large"
+                size={13}
+                color={viewMode === "grid" ? "#fff" : "rgba(15,23,42,0.65)"}
+              />
+            </Pressable>
+            <Pressable
+              onPress={() => setViewMode("list")}
+              style={({ pressed }) => [
+                styles.viewBtn,
+                viewMode === "list" && styles.viewBtnActive,
+                pressed && styles.pressed,
+              ]}
+              hitSlop={10}
+            >
+              <FontAwesome
+                name="list"
+                size={13}
+                color={viewMode === "list" ? "#fff" : "rgba(15,23,42,0.65)"}
               />
             </Pressable>
           </View>
 
-          {/* Small meta row */}
-          <View style={styles.metaRow}>
-            <Text style={styles.metaText} numberOfLines={1}>
-              {sortLabel}
-              {type !== "الكل" ? ` • ${type}` : ""}
-              {filtersActive ? ` • ${filtered.length} نتيجة` : ""}
-            </Text>
-
-            {filtersActive && (
-              <Pressable
-                onPress={resetAll}
-                style={({ pressed }) => [
-                  styles.resetPill,
-                  pressed && styles.pressed,
-                ]}
-                hitSlop={10}
-              >
-                <FontAwesome name="undo" size={12} color={THEME.primary} />
-                <Text style={styles.resetPillText}>تصفير</Text>
-              </Pressable>
-            )}
-          </View>
+          {filtersActive && (
+            <Pressable
+              onPress={resetAll}
+              style={({ pressed }) => [
+                styles.resetPill,
+                pressed && styles.pressed,
+              ]}
+              hitSlop={10}
+            >
+              <FontAwesome name="undo" size={12} color={THEME.primary} />
+              <Text style={styles.resetPillText}>تصفير</Text>
+            </Pressable>
+          )}
         </View>
       </View>
+    </View>
+  );
 
-      {/* Error */}
-      {error ? (
-        <View style={styles.stateCard}>
-          <Text style={styles.errorIcon}>⚠️</Text>
-          <Text style={styles.errorTitle}>حصل خطأ</Text>
-          <Text style={styles.stateText}>فشل تحميل العقارات. جرّب تاني.</Text>
-
-          <Pressable
-            onPress={() => refetch()}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.primaryBtnText}>إعادة المحاولة</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => String((item as any).id)}
-          numColumns={2}
-          renderItem={({ item }) => (
-            <View style={styles.col}>
-              <PropertyCard property={item as any} />
-            </View>
-          )}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.content,
-            filtered.length === 0 && styles.contentEmpty,
-          ]}
-          columnWrapperStyle={filtered.length ? styles.row : undefined}
-          refreshControl={
-            <RefreshControl
-              refreshing={!!isFetching}
-              onRefresh={() => refetch()}
-              tintColor={THEME.primary}
+  return (
+    <View style={styles.screen}>
+      <FlatList
+        key={`admin-home-cols-${numColumns}`}
+        data={error ? [] : filtered}
+        keyExtractor={(item) => String((item as any).id)}
+        numColumns={numColumns}
+        renderItem={({ item }) => (
+          <View style={numColumns === 2 ? styles.col : styles.col1}>
+            <PropertyCard
+              property={item as any}
+              hrefBase="/(admin)/home"
+              size={numColumns === 2 ? "small" : "default"}
             />
-          }
-          ListEmptyComponent={
+          </View>
+        )}
+        ListHeaderComponent={Header}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.content,
+          !error && filtered.length === 0 && styles.contentEmpty,
+        ]}
+        columnWrapperStyle={
+          numColumns === 2 && !error && filtered.length ? styles.row : undefined
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={!!isFetching}
+            onRefresh={() => refetch()}
+            tintColor={THEME.primary}
+          />
+        }
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        removeClippedSubviews
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        updateCellsBatchingPeriod={50}
+        ListEmptyComponent={
+          error ? (
+            <View style={styles.stateCard}>
+              <Text style={styles.errorIcon}>⚠️</Text>
+              <Text style={styles.errorTitle}>حصل خطأ</Text>
+              <Text style={styles.stateText}>
+                فشل تحميل العقارات. جرّب تاني.
+              </Text>
+
+              <Pressable
+                onPress={() => refetch()}
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.primaryBtnText}>إعادة المحاولة</Text>
+              </Pressable>
+            </View>
+          ) : (
             <View style={styles.emptyWrap}>
               <View style={styles.emptyIconWrap}>
                 <FontAwesome name="search" size={18} color={THEME.primary} />
@@ -290,20 +341,24 @@ export default function HomeScreen() {
                 <Text style={styles.ghostBtnText}>تصفير الفلاتر</Text>
               </Pressable>
             </View>
-          }
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-          ListFooterComponent={<View style={{ height: 20 }} />}
-        />
-      )}
+          )
+        }
+        ItemSeparatorComponent={() => (
+          <View style={{ height: numColumns === 2 ? 12 : 10 }} />
+        )}
+        ListFooterComponent={<View style={{ height: 20 }} />}
+      />
 
-      {/* Bottom Sheet */}
       <Modal
         visible={filterOpen}
         transparent
         animationType="fade"
         onRequestClose={() => setFilterOpen(false)}
       >
-        <Pressable style={styles.backdrop} onPress={() => setFilterOpen(false)} />
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => setFilterOpen(false)}
+        />
 
         <View style={styles.sheet}>
           <View style={styles.sheetHeader}>
@@ -311,14 +366,16 @@ export default function HomeScreen() {
 
             <Pressable
               onPress={() => setFilterOpen(false)}
-              style={({ pressed }) => [styles.sheetClose, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.sheetClose,
+                pressed && styles.pressed,
+              ]}
               hitSlop={10}
             >
               <FontAwesome name="times" size={14} color={THEME.dark[100]} />
             </Pressable>
           </View>
 
-          {/* Type */}
           <Text style={styles.sectionTitle}>نوع العقار</Text>
           <View style={styles.optionsWrap}>
             <OptionChip
@@ -336,7 +393,6 @@ export default function HomeScreen() {
             ))}
           </View>
 
-          {/* Sort */}
           <Text style={styles.sectionTitle}>الترتيب</Text>
           <View style={styles.sortRow}>
             <SortOption
@@ -362,14 +418,20 @@ export default function HomeScreen() {
                 setTmpType("الكل");
                 setTmpSort("latest");
               }}
-              style={({ pressed }) => [styles.sheetGhost, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.sheetGhost,
+                pressed && styles.pressed,
+              ]}
             >
               <Text style={styles.sheetGhostText}>تصفير</Text>
             </Pressable>
 
             <Pressable
               onPress={applySheet}
-              style={({ pressed }) => [styles.sheetPrimary, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.sheetPrimary,
+                pressed && styles.pressed,
+              ]}
             >
               <Text style={styles.sheetPrimaryText}>تطبيق</Text>
             </Pressable>
@@ -379,8 +441,6 @@ export default function HomeScreen() {
     </View>
   );
 }
-
-/* ---------- tiny components ---------- */
 
 function OptionChip({
   label,
@@ -425,14 +485,14 @@ function SortOption({
         pressed && styles.pressed,
       ]}
     >
-      <Text style={[styles.sortOptionText, active && styles.sortOptionTextActive]}>
+      <Text
+        style={[styles.sortOptionText, active && styles.sortOptionTextActive]}
+      >
         {label}
       </Text>
     </Pressable>
   );
 }
-
-/* ---------- styles ---------- */
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: THEME.white[100] },
@@ -519,6 +579,27 @@ const styles = StyleSheet.create({
     color: "rgba(15,23,42,0.60)",
     textAlign: "right",
   },
+
+  viewToggle: {
+    flexDirection: "row-reverse",
+    gap: 8,
+    padding: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(15,23,42,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.08)",
+  },
+  viewBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewBtnActive: {
+    backgroundColor: THEME.primary,
+  },
+
   resetPill: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -535,7 +616,9 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 12, paddingTop: 6, paddingBottom: 24 },
   contentEmpty: { flexGrow: 1, justifyContent: "center" },
   row: { justifyContent: "space-between" },
+
   col: { flex: 1, maxWidth: "50%", paddingHorizontal: 6 },
+  col1: { flex: 1, width: "100%", paddingHorizontal: 0 },
 
   stateCard: {
     marginHorizontal: 12,

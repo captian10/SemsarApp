@@ -46,6 +46,9 @@ export default function PropertyCard({
 
   const imageH = isMicro ? 118 : isSmall ? 155 : 195;
 
+  // ✅ show favorite only in user flows (when handler exists)
+  const showFavorite = typeof onToggleFavorite === "function";
+
   return (
     <View
       style={[
@@ -55,7 +58,9 @@ export default function PropertyCard({
       ]}
     >
       <Link href={`${hrefBase}/${property.id}`} asChild>
-        <Pressable style={({ pressed }) => [styles.pressWrap, pressed && styles.pressed]}>
+        <Pressable
+          style={({ pressed }) => [styles.pressWrap, pressed && styles.pressed]}
+        >
           <View style={styles.imageBox}>
             <RemoteImage
               path={image}
@@ -111,27 +116,29 @@ export default function PropertyCard({
               </Text>
             </View>
 
-            {/* ✅ Favorite glass button */}
-            <Pressable
-              hitSlop={12}
-              style={({ pressed }) => [
-                styles.favBtn,
-                isSmall && styles.favBtnSmall,
-                isMicro && styles.favBtnMicro,
-                pressed && styles.favPressed,
-              ]}
-              onPress={(e) => {
-                // @ts-ignore
-                e?.stopPropagation?.();
-                onToggleFavorite?.(String(property.id));
-              }}
-            >
-              <FontAwesome
-                name={isFavorite ? "heart" : "heart-o"}
-                size={isMicro ? 14 : isSmall ? 16 : 18}
-                color={isFavorite ? "#E11D48" : "rgba(11,18,32,0.92)"}
-              />
-            </Pressable>
+            {/* ✅ Favorite glass button (ONLY if handler exists) */}
+            {showFavorite && (
+              <Pressable
+                hitSlop={12}
+                style={({ pressed }) => [
+                  styles.favBtn,
+                  isSmall && styles.favBtnSmall,
+                  isMicro && styles.favBtnMicro,
+                  pressed && styles.favPressed,
+                ]}
+                onPress={(e) => {
+                  // @ts-ignore
+                  e?.stopPropagation?.();
+                  onToggleFavorite?.(String(property.id));
+                }}
+              >
+                <FontAwesome
+                  name={isFavorite ? "heart" : "heart-o"}
+                  size={isMicro ? 14 : isSmall ? 16 : 18}
+                  color={isFavorite ? "#E11D48" : "rgba(11,18,32,0.92)"}
+                />
+              </Pressable>
+            )}
 
             {/* ✅ Bottom overlay: clean + readable */}
             <View
@@ -194,8 +201,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 4,
   },
-  cardSmall: { borderRadius: 14, shadowOpacity: 0.055, shadowRadius: 12, elevation: 3 },
-  cardMicro: { borderRadius: 12, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
+  cardSmall: {
+    borderRadius: 14,
+    shadowOpacity: 0.055,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  cardMicro: {
+    borderRadius: 12,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
 
   pressWrap: { width: "100%" },
   pressed: { opacity: 0.97, transform: [{ scale: 0.997 }] },

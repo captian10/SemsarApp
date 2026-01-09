@@ -1,6 +1,3 @@
-// (admin)/home/create.tsx
-// ✅ Create / Edit Property (cover + multiple extra images + owner contact)
-
 import {
   PROPERTY_STATUS,
   PROPERTY_TYPES,
@@ -11,12 +8,10 @@ import {
   type PropertyStatus,
   type PropertyType,
 } from "@api/properties";
-
 import {
   usePropertyContact,
   useUpsertPropertyContact,
 } from "@api/property-contacts";
-
 import { THEME } from "@constants/Colors";
 import { supabase } from "@lib/supabase";
 import { decode } from "base64-arraybuffer";
@@ -58,7 +53,6 @@ import { defaultPropertyImage as defaultPropertyImageUrl } from "../../../compon
 const BUCKET = "property-images";
 const MAX_IMAGE_BYTES = 7_000_000;
 
-// fallback image
 const DEFAULT_IMAGE_SOURCE: ImageSourcePropType = {
   uri: defaultPropertyImageUrl,
 };
@@ -101,7 +95,6 @@ function getContentType(fileExt: string) {
   return "image/png";
 }
 
-// ✅ Fix expo-image-picker warning (no MediaTypeOptions)
 function getImagesMediaTypes(): any {
   const MT = (ImagePicker as any).MediaType;
   if (MT?.Images) return [MT.Images];
@@ -115,26 +108,19 @@ function isRlsError(err: any) {
 
 const digitsOnly = (s: string) => String(s ?? "").replace(/\D/g, "");
 
-/** ========= Form Types ========= */
-
 type FormData = {
-  coverImage: string | null; // cover (file:// OR storage path)
+  coverImage: string | null;
   title: string;
   description: string;
   price: string;
   currency: string;
   city: string;
   address: string;
-
-  // specs (optional)
   bedrooms: string;
   bathrooms: string;
   area: string;
-
-  // ✅ owner contact (admin-only; stored in property_contacts)
   ownerName: string;
   ownerPhone: string;
-
   propertyType: PropertyType;
   status: PropertyStatus;
 };
@@ -154,10 +140,8 @@ const initialFormData: FormData = {
   bedrooms: "",
   bathrooms: "",
   area: "",
-
   ownerName: "",
   ownerPhone: "",
-
   propertyType: (PROPERTY_TYPES?.[0] ?? "شقة") as PropertyType,
   status: "available",
 };
@@ -172,8 +156,6 @@ function formReducer(state: FormData, action: FormAction): FormData {
       return state;
   }
 }
-
-/** ========= Small Components ========= */
 
 const Field = memo(function Field({
   label,
@@ -357,13 +339,10 @@ const StatusSelector = memo(function StatusSelector({
   );
 });
 
-/** ========= Screen ========= */
-
 export default function CreatePropertyScreen() {
   const router = useRouter();
-
-  // params
   const { id: idParam } = useLocalSearchParams();
+
   const id = useMemo(() => {
     const raw = Array.isArray(idParam) ? idParam[0] : idParam;
     return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : "";
@@ -371,37 +350,30 @@ export default function CreatePropertyScreen() {
 
   const isUpdating = Boolean(id);
 
-  // data hooks
   const { mutate: insertProperty } = useInsertProperty();
   const { mutate: updateProperty } = useUpdateProperty();
   const { mutate: deleteProperty } = useDeleteProperty();
   const { data: updatingProperty } = useProperty(isUpdating ? id : "");
 
-  // ✅ owner contact hooks (admin-only by RLS)
   const { data: contact } = usePropertyContact(isUpdating ? id : "");
   const { mutateAsync: upsertContact } = useUpsertPropertyContact();
 
-  // form state
   const [formData, dispatchForm] = useReducer(formReducer, initialFormData);
 
-  // ✅ sections toggle
   const [showSpecs, setShowSpecs] = useState(false);
   const [showOwner, setShowOwner] = useState(false);
 
-  // ✅ extra images section
   const [extraImages, setExtraImages] = useState<string[]>([]);
   const [didLoadImages, setDidLoadImages] = useState(false);
+  const [imagesLoadError, setImagesLoadError] = useState<string | null>(null);
   const [showExtraImages, setShowExtraImages] = useState(false);
 
-  // refs to manage edit init
   const contactHadRowRef = useRef(false);
   const didInitContactRef = useRef(false);
 
-  // errors and loading
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // preview cover image
   const imageSourceForPreview: ImageSourcePropType = useMemo(() => {
     const c = formData.coverImage;
     if (!c) return DEFAULT_IMAGE_SOURCE;
@@ -412,7 +384,20 @@ export default function CreatePropertyScreen() {
     return data?.publicUrl ? { uri: data.publicUrl } : DEFAULT_IMAGE_SOURCE;
   }, [formData.coverImage]);
 
-  // fill fields when editing
+  const extraThumbs = useMemo(() => {
+    return extraImages.map((v) => {
+      const s = String(v ?? "").trim();
+      if (!s) return { key: s, uri: defaultPropertyImageUrl, raw: s };
+      if (isLocalUri(s) || isHttpUrl(s)) return { key: s, uri: s, raw: s };
+      const { data } = supabase.storage.from(BUCKET).getPublicUrl(s);
+      return {
+        key: s,
+        uri: data?.publicUrl ?? defaultPropertyImageUrl,
+        raw: s,
+      };
+    });
+  }, [extraImages]);
+
   useEffect(() => {
     if (!updatingProperty) return;
 
@@ -449,13 +434,17 @@ export default function CreatePropertyScreen() {
     });
 
     const bedrooms =
-      updatingProperty.bedrooms != null ? String(updatingProperty.bedrooms) : "";
+      updatingProperty.bedrooms != null
+        ? String(updatingProperty.bedrooms)
+        : "";
     const bathrooms =
       updatingProperty.bathrooms != null
         ? String(updatingProperty.bathrooms)
         : "";
     const area =
-      updatingProperty.area_sqm != null ? String(updatingProperty.area_sqm) : "";
+      updatingProperty.area_sqm != null
+        ? String(updatingProperty.area_sqm)
+        : "";
 
     dispatchForm({ type: "UPDATE_FIELD", field: "bedrooms", value: bedrooms });
     dispatchForm({
@@ -480,6 +469,7 @@ export default function CreatePropertyScreen() {
         ? updatingProperty.property_type
         : PROPERTY_TYPES?.[0] ?? "شقة") as PropertyType,
     });
+
     dispatchForm({
       type: "UPDATE_FIELD",
       field: "status",
@@ -487,6 +477,7 @@ export default function CreatePropertyScreen() {
         ? updatingProperty.status
         : "available") as PropertyStatus,
     });
+
     dispatchForm({
       type: "UPDATE_FIELD",
       field: "coverImage",
@@ -494,12 +485,9 @@ export default function CreatePropertyScreen() {
     });
   }, [updatingProperty]);
 
-  // ✅ init contact once on edit
   useEffect(() => {
     if (!isUpdating) return;
     if (didInitContactRef.current) return;
-
-    // hook returns null when no row exists
     if (contact === undefined) return;
 
     didInitContactRef.current = true;
@@ -517,7 +505,6 @@ export default function CreatePropertyScreen() {
     }
   }, [isUpdating, contact]);
 
-  // ✅ load existing property_images (edit)
   useEffect(() => {
     if (!isUpdating) return;
     if (!id) return;
@@ -525,6 +512,8 @@ export default function CreatePropertyScreen() {
 
     (async () => {
       try {
+        setImagesLoadError(null);
+
         const { data, error } = await supabase
           .from("property_images")
           .select("id,url,sort_order")
@@ -539,8 +528,8 @@ export default function CreatePropertyScreen() {
 
         setExtraImages(urls);
         if (urls.length) setShowExtraImages(true);
-      } catch {
-        // ignore
+      } catch (e: any) {
+        setImagesLoadError(e?.message ?? "فشل تحميل الصور الإضافية");
       } finally {
         setDidLoadImages(true);
       }
@@ -552,10 +541,9 @@ export default function CreatePropertyScreen() {
     setShowSpecs(false);
     setShowOwner(false);
     setShowExtraImages(false);
-
     setExtraImages([]);
     setDidLoadImages(false);
-
+    setImagesLoadError(null);
     didInitContactRef.current = false;
     contactHadRowRef.current = false;
   };
@@ -574,7 +562,6 @@ export default function CreatePropertyScreen() {
     else if (p <= 0) newErrors.push("السعر يجب أن يكون أكبر من 0");
     else if (p > 1e10) newErrors.push("السعر كبير جدًا");
 
-    // ✅ specs optional
     if (formData.bedrooms.trim()) {
       const b = toIntOrNull(formData.bedrooms);
       if (b == null) newErrors.push("عدد الغرف غير صحيح");
@@ -593,7 +580,6 @@ export default function CreatePropertyScreen() {
       else if (a <= 0 || a > 1e6) newErrors.push("المساحة غير منطقية");
     }
 
-    // ✅ owner phone optional (basic validation)
     if (formData.ownerPhone.trim()) {
       const d = digitsOnly(formData.ownerPhone);
       if (d.length < 7) newErrors.push("رقم موبايل صاحب العقار غير صحيح");
@@ -605,8 +591,6 @@ export default function CreatePropertyScreen() {
     setErrors(newErrors);
     return newErrors.length === 0;
   };
-
-  /** ========= Picking images ========= */
 
   const pickCoverImage = async () => {
     if (loading) return;
@@ -629,7 +613,6 @@ export default function CreatePropertyScreen() {
     const selected = result.assets?.[0];
     if (!selected?.uri) return;
 
-    // ✅ size check
     try {
       const info = await FileSystem.getInfoAsync(selected.uri, {
         size: true,
@@ -658,7 +641,6 @@ export default function CreatePropertyScreen() {
       return;
     }
 
-    // ✅ allowsMultipleSelection قد لا يعمل على كل الأجهزة/النسخ
     const result: any = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: getImagesMediaTypes(),
       quality: 1,
@@ -673,10 +655,8 @@ export default function CreatePropertyScreen() {
     const uris = assets
       .map((a) => String(a?.uri ?? "").trim())
       .filter((u) => u.startsWith("file://"));
-
     if (!uris.length) return;
 
-    // ✅ size check for each
     const okUris: string[] = [];
     for (const uri of uris) {
       try {
@@ -694,6 +674,9 @@ export default function CreatePropertyScreen() {
       return;
     }
 
+    setImagesLoadError(null);
+    setDidLoadImages(true);
+
     setExtraImages((prev) => {
       const set = new Set(prev);
       okUris.forEach((u) => set.add(u));
@@ -704,12 +687,11 @@ export default function CreatePropertyScreen() {
   };
 
   const removeExtraImage = (uriOrPath: string) => {
+    setImagesLoadError(null);
+    setDidLoadImages(true);
     setExtraImages((prev) => prev.filter((x) => x !== uriOrPath));
   };
 
-  /** ========= Upload ========= */
-
-  // ✅ upload to ROOT: <uuid>.<ext>
   const uploadImage = async (localUri: string) => {
     const base64 = await FileSystem.readAsStringAsync(localUri, {
       encoding: FileSystem.EncodingType.Base64,
@@ -721,13 +703,14 @@ export default function CreatePropertyScreen() {
 
     const { data, error } = await supabase.storage
       .from(BUCKET)
-      .upload(filePath, decode(base64), { contentType, upsert: false });
+      .upload(filePath, decode(base64), {
+        contentType,
+        upsert: false,
+      });
 
     if (error) {
       if (isRlsError(error)) {
-        throw new Error(
-          "RLS منع رفع الصورة في Storage. سياسات storage.objects عندك قد تمنع الرفع في root."
-        );
+        throw new Error("RLS منع رفع الصورة في Storage.");
       }
       throw new Error(error.message);
     }
@@ -746,7 +729,6 @@ export default function CreatePropertyScreen() {
         const p = await uploadImage(s);
         if (p) paths.push(p);
       } else {
-        // already storage path OR full url
         paths.push(s);
       }
     }
@@ -754,77 +736,61 @@ export default function CreatePropertyScreen() {
     return paths;
   };
 
-  /** ========= Payload ========= */
-
   const buildPayload = async (finalCover: string | null) => {
     const { data: sess } = await supabase.auth.getSession();
     const uid = sess.session?.user?.id ?? null;
-    if (!uid) {
-      throw new Error(
-        "أنت غير مسجل دخول (auth.uid() = null). اعمل Login من جديد."
-      );
-    }
+    if (!uid) throw new Error("أنت غير مسجل دخول.");
 
     const payload: any = {
       title: formData.title.trim(),
       description: formData.description.trim() || null,
-
       price: round2(toFloatOrNull(formData.price) ?? 0),
       currency: formData.currency.trim() || "جنيه",
-
       city: formData.city.trim() || null,
       address: formData.address.trim() || null,
-
       bedrooms: toIntOrNull(formData.bedrooms),
       bathrooms: toIntOrNull(formData.bathrooms),
       area_sqm: (() => {
         const a = toFloatOrNull(formData.area);
         return a == null ? null : round2(a);
       })(),
-
       property_type: formData.propertyType ?? null,
       status: formData.status ?? "available",
-
       cover_image: finalCover,
     };
 
-    // ✅ satisfy your insert policy too
     if (!isUpdating) payload.created_by = uid;
-
     return payload;
   };
 
-  /** ========= DB sync for contact + images ========= */
-
-  // ✅ sync owner contact after saving property
   const syncOwnerContact = async (propertyId: string) => {
     const owner_name = formData.ownerName.trim() || null;
     const owner_phone = formData.ownerPhone.trim() || null;
 
-    // if user entered something -> upsert
     if (owner_name || owner_phone) {
       await upsertContact({ property_id: propertyId, owner_name, owner_phone });
       contactHadRowRef.current = true;
       return;
     }
 
-    // if clearing existing row on update -> delete it
     if (isUpdating && contactHadRowRef.current) {
       const { error } = await supabase
         .from("property_contacts")
         .delete()
         .eq("property_id", propertyId);
-
       if (error) throw new Error(error.message);
       contactHadRowRef.current = false;
     }
   };
 
-  // ✅ save property_images as the exact order in extraImages
   const syncPropertyImages = async (propertyId: string) => {
+    const hasNewLocal = extraImages.some((x) => isLocalUri(x));
+
+    if (isUpdating && !didLoadImages && !hasNewLocal) return;
+    if (isUpdating && imagesLoadError && !hasNewLocal) return;
+
     const finalPaths = await uploadManyImages(extraImages);
 
-    // delete old
     const { error: delErr } = await supabase
       .from("property_images")
       .delete()
@@ -839,11 +805,11 @@ export default function CreatePropertyScreen() {
       sort_order: idx,
     }));
 
-    const { error: insErr } = await supabase.from("property_images").insert(rows);
+    const { error: insErr } = await supabase
+      .from("property_images")
+      .insert(rows);
     if (insErr) throw new Error(insErr.message);
   };
-
-  /** ========= Submit handlers ========= */
 
   const onCreate = async () => {
     setErrors([]);
@@ -901,28 +867,25 @@ export default function CreatePropertyScreen() {
       const payload = await buildPayload(finalCover);
       delete payload.created_by;
 
-      updateProperty(
-        { id, ...payload } as any,
-        {
-          onSuccess: async (row: any) => {
-            try {
-              const pid = String(row?.id ?? id);
-              await syncOwnerContact(pid);
-              await syncPropertyImages(pid);
+      updateProperty({ id, ...payload } as any, {
+        onSuccess: async (row: any) => {
+          try {
+            const pid = String(row?.id ?? id);
+            await syncOwnerContact(pid);
+            await syncPropertyImages(pid);
 
-              setLoading(false);
-              router.back();
-            } catch (e: any) {
-              setLoading(false);
-              setErrors([e?.message || "فشل حفظ الصور/بيانات صاحب العقار"]);
-            }
-          },
-          onError: (err: any) => {
             setLoading(false);
-            setErrors([err?.message || "فشل تحديث العقار"]);
-          },
-        }
-      );
+            router.back();
+          } catch (e: any) {
+            setLoading(false);
+            setErrors([e?.message || "فشل حفظ الصور/بيانات صاحب العقار"]);
+          }
+        },
+        onError: (err: any) => {
+          setLoading(false);
+          setErrors([err?.message || "فشل تحديث العقار"]);
+        },
+      });
     } catch (e: any) {
       setLoading(false);
       setErrors([e?.message || "فشل رفع الصورة"]);
@@ -956,8 +919,6 @@ export default function CreatePropertyScreen() {
       { text: "حذف", style: "destructive", onPress: onDelete },
     ]);
   };
-
-  /** ========= Render ========= */
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
@@ -995,7 +956,6 @@ export default function CreatePropertyScreen() {
           </View>
 
           <View style={styles.card}>
-            {/* ✅ Cover Image */}
             <Pressable
               onPress={loading ? undefined : pickCoverImage}
               style={({ pressed }) => [
@@ -1012,12 +972,13 @@ export default function CreatePropertyScreen() {
               />
               <View style={styles.imageOverlay}>
                 <Text style={styles.imageOverlayText}>
-                  {formData.coverImage ? "تغيير صورة الغلاف" : "اختيار صورة غلاف"}
+                  {formData.coverImage
+                    ? "تغيير صورة الغلاف"
+                    : "اختيار صورة غلاف"}
                 </Text>
               </View>
             </Pressable>
 
-            {/* ✅ Extra Images */}
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionHint}>صور إضافية (اختياري)</Text>
 
@@ -1057,15 +1018,15 @@ export default function CreatePropertyScreen() {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.thumbsRow}
                   >
-                    {extraImages.map((uri) => (
-                      <View key={uri} style={styles.thumbWrap}>
+                    {extraThumbs.map((it) => (
+                      <View key={it.key} style={styles.thumbWrap}>
                         <Image
-                          source={{ uri }}
+                          source={{ uri: it.uri }}
                           style={styles.thumb}
                           resizeMode="cover"
                         />
                         <Pressable
-                          onPress={() => removeExtraImage(uri)}
+                          onPress={() => removeExtraImage(it.raw)}
                           style={styles.thumbRemove}
                           hitSlop={10}
                           accessibilityLabel="حذف الصورة"
@@ -1150,7 +1111,7 @@ export default function CreatePropertyScreen() {
               onChangeText={(v) =>
                 dispatchForm({ type: "UPDATE_FIELD", field: "city", value: v })
               }
-              placeholder="مثال: القاهرة"
+              placeholder="مثال: قنا"
               loading={loading}
             />
 
@@ -1168,7 +1129,6 @@ export default function CreatePropertyScreen() {
               loading={loading}
             />
 
-            {/* ✅ Owner Contact (Admin only) */}
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionHint}>صاحب العقار (للأدمن فقط)</Text>
 
@@ -1220,7 +1180,6 @@ export default function CreatePropertyScreen() {
               </>
             )}
 
-            {/* ✅ Specs (optional section) */}
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionHint}>المواصفات (اختياري)</Text>
 
@@ -1337,8 +1296,6 @@ export default function CreatePropertyScreen() {
     </TouchableWithoutFeedback>
   );
 }
-
-/** ========= Styles ========= */
 
 type Styles = {
   screen: ViewStyle;
@@ -1560,7 +1517,6 @@ const styles = StyleSheet.create<Styles>({
 
   grid3: { flexDirection: "row-reverse", gap: 10 },
 
-  // ✅ extra images UI
   addImagesBtn: {
     alignSelf: "flex-end",
     paddingHorizontal: 14,

@@ -8,10 +8,6 @@ import { FONT } from "@/constants/Typography";
 import { THEME } from "@constants/Colors";
 import { useAuth } from "@providers/AuthProvider";
 
-// ✅ لو لسه عندك Hook للـ requests خليه زي ما هو (مش هيأثر على jobs)
-// لو عملت Hook جديد للوظائف غيّر الاستيراد هنا
-import { useAdminOpenRequestFromPush } from "@/lib/useAdminOpenRequestFromPush";
-
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>["name"];
   color: string;
@@ -23,10 +19,6 @@ export default function TabLayout() {
   const { isAdmin } = useAuth();
   const insets = useSafeAreaInsets();
 
-  // ✅ فتح صفحة (لو عندك إشعارات للطلبات/الوظائف)
-  useAdminOpenRequestFromPush();
-
-  // ✅ لو مش Admin رجّعه لليوزر
   if (!isAdmin) return <Redirect href="/(user)" />;
 
   const tabBarPaddingBottom =
@@ -36,16 +28,13 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-
         tabBarActiveTintColor: THEME.primary,
         tabBarInactiveTintColor: THEME.gray[100],
-
         tabBarLabelStyle: {
           fontFamily: FONT.medium,
           fontSize: 11,
           paddingTop: 2,
         },
-
         tabBarStyle: [
           styles.tabBar,
           {
@@ -55,7 +44,6 @@ export default function TabLayout() {
         ],
       }}
     >
-      {/* hide /(admin)/index */}
       <Tabs.Screen name="index" options={{ href: null }} />
 
       <Tabs.Screen
@@ -66,7 +54,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* ✅ بدل requests -> jobs */}
       <Tabs.Screen
         name="jobs"
         options={{
@@ -86,12 +73,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#EDEDED",
     paddingTop: 8,
-
     shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: -6 },
-
     elevation: 10,
   },
 });
