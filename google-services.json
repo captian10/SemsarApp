@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "489199810944",
-    "project_id": "semsarapp-7bfb0",
-    "storage_bucket": "semsarapp-7bfb0.firebasestorage.app"
+    "project_number": "717152980066",
+    "project_id": "semsarapp-35a4d",
+    "storage_bucket": "semsarapp-35a4d.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:489199810944:android:36f57bbbcec04ee9d56965",
+        "mobilesdk_app_id": "1:717152980066:android:a26aa57f1b954392f2953b",
         "android_client_info": {
           "package_name": "com.captian10.semsarapp"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyADPxpXhWQ4YyKnoXo9fNHe4YCTPCfg2KE"
+          "current_key": "AIzaSyDd7gfPtTGh7T3zW7xzQViwatQRUy_Ocio"
         }
       ],
       "services": {

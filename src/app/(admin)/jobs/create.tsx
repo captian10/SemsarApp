@@ -1,3 +1,5 @@
+// src/app/(admin)/jobs/create.tsx   (or edit.tsx depending on your route)
+import type { Tables } from "database.types";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -13,7 +15,10 @@ import {
 
 import { FONT } from "@/constants/Typography";
 import { useCreateJob, useJob, useUpdateJob } from "@api/jobs";
+import { broadcastNewListing } from "@lib/notifications"; // ✅ use the shared helper
 import { useAppTheme } from "@providers/AppThemeProvider";
+
+type Job = Tables<"jobs">;
 
 type FormState = {
   title: string;
@@ -45,7 +50,7 @@ export default function AdminJobCreateOrEdit() {
 
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
-  const jobId = params.id;
+  const jobId = typeof params.id === "string" ? params.id : undefined;
 
   const isEdit = !!jobId;
 
@@ -98,14 +103,26 @@ export default function AdminJobCreateOrEdit() {
 
     try {
       if (isEdit && jobId) {
-        const updated = await updateMutation.mutateAsync({
+        const updated = (await updateMutation.mutateAsync({
           id: jobId,
           ...payload,
-        });
+        })) as Job;
+
         Alert.alert("تم", "تم تحديث الوظيفة بنجاح ✅");
         router.replace(`/(admin)/jobs/${updated.id}`);
       } else {
-        const created = await createMutation.mutateAsync(payload);
+        const created = (await createMutation.mutateAsync(payload)) as Job;
+
+        // ✅ Send push to ALL users (best-effort, don't block UI)
+        void broadcastNewListing({
+          kind: "job",
+          id: created.id,
+          title: created.title ?? undefined,
+          company: created.company ?? null,
+        }).catch((e: any) =>
+          console.log("[push] broadcast job failed:", e?.message ?? String(e))
+        );
+
         Alert.alert("تم", "تم إضافة الوظيفة بنجاح ✅");
         router.replace(`/(admin)/jobs/${created.id}`);
       }
@@ -218,9 +235,7 @@ export default function AdminJobCreateOrEdit() {
 
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: t.colors.text }]}>
-                الشركة
-              </Text>
+              <Text style={[styles.label, { color: t.colors.text }]}>الشركة</Text>
               <TextInput
                 value={form.company}
                 onChangeText={(v) => setField("company", v)}
@@ -239,9 +254,7 @@ export default function AdminJobCreateOrEdit() {
             </View>
 
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: t.colors.text }]}>
-                المكان
-              </Text>
+              <Text style={[styles.label, { color: t.colors.text }]}>المكان</Text>
               <TextInput
                 value={form.location}
                 onChangeText={(v) => setField("location", v)}
@@ -386,6 +399,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontFamily: FONT.regular,
     fontSize: 13,
+    // ✅ don't pass writingDirection as a TextInput prop (TS error) — keep it inside style only
     writingDirection: "rtl",
   },
 

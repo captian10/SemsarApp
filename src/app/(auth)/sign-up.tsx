@@ -1,6 +1,6 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { supabase } from "@lib/supabase";
-import { Link, Stack } from "expo-router";
+import { Link, Stack, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -22,14 +22,37 @@ import Button from "../../components/Button";
 import { THEME } from "../../constants/Colors";
 
 const cleanPhone = (v: string) =>
-  v
+  String(v ?? "")
     .replace(/[^\d+]/g, "")
     .replace(/\s+/g, "")
     .trim();
 
-const DEFAULT_ROLE: "user" | "admin" = "user";
+const isValidEmail = (email: string) => {
+  const e = String(email ?? "").trim();
+  // simple, good-enough
+  return e.length >= 6 && e.includes("@") && e.includes(".");
+};
+
+// ✅ RPC: public.is_phone_available(p_phone text) -> boolean
+async function isPhoneAvailable(phone: string): Promise<boolean> {
+  const ph = cleanPhone(phone);
+  if (!ph) return false;
+
+  const { data, error } = await supabase.rpc("is_phone_available", {
+    p_phone: ph,
+  });
+
+  if (error) {
+    console.log("[is_phone_available] error:", error.message);
+    throw new Error("تعذر التحقق من رقم الهاتف الآن. حاول مرة أخرى.");
+  }
+
+  return Boolean(data);
+}
 
 const SignUpScreen = () => {
+  const router = useRouter();
+
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -82,6 +105,11 @@ const SignUpScreen = () => {
       return;
     }
 
+    if (!isValidEmail(e)) {
+      Alert.alert("تنبيه", "البريد الإلكتروني غير صحيح.");
+      return;
+    }
+
     if (ph.length < 8) {
       Alert.alert("تنبيه", "رقم الهاتف غير صحيح.");
       return;
@@ -100,6 +128,17 @@ const SignUpScreen = () => {
     setLoading(true);
 
     try {
+      // ✅ 0) Pre-check phone BEFORE creating auth user
+      const available = await isPhoneAvailable(ph);
+      if (!available) {
+        Alert.alert(
+          "رقم الهاتف مسجّل",
+          "توقف تسجيل الحساب لأن الرقم مسجل من قبل. جرّب رقم آخر أو سجّل دخول."
+        );
+        return;
+      }
+
+      // ✅ 1) Sign up (NO role)
       const { data, error } = await supabase.auth.signUp({
         email: e,
         password: p,
@@ -107,7 +146,6 @@ const SignUpScreen = () => {
           data: {
             full_name: name,
             phone: ph,
-            role: DEFAULT_ROLE,
           },
         },
       });
@@ -117,33 +155,47 @@ const SignUpScreen = () => {
         return;
       }
 
-      const userId = data.user?.id ?? data.session?.user?.id;
+      const userId = data.user?.id ?? data.session?.user?.id ?? null;
 
-      if (userId) {
+      /**
+       * ✅ 2) If session exists => user is logged-in immediately (email confirm OFF)
+       * We can safely upsert profile to ensure it exists and has full_name/phone.
+       *
+       * If session is null (email confirm ON) => DO NOT touch profiles from client now.
+       * Your DB trigger should create the profile row. AuthProvider will also fallback later.
+       */
+      if (data.session && userId) {
         const { error: upsertErr } = await supabase.from("profiles").upsert(
           {
             id: userId,
-            full_name: name,
+            full_name: name, // keep string (your types expect non-null)
             phone: ph,
-            role: DEFAULT_ROLE,
+            // ❌ don't send role
           },
           { onConflict: "id" }
         );
 
         if (upsertErr) {
-          console.log("[profiles upsert] error:", upsertErr);
+          console.log("[profiles upsert] error:", upsertErr.message);
           Alert.alert(
             "تم إنشاء الحساب",
             "الحساب اتعمل، لكن حصلت مشكلة بسيطة في حفظ البيانات الإضافية. يمكنك تعديلها من صفحة البروفايل."
           );
-          return;
+          // continue anyway
         }
       }
 
-      Alert.alert(
-        "تم",
-        "تم إنشاء الحساب بنجاح. لو تفعيل البريد مفعّل، يرجى فحص البريد الإلكتروني."
-      );
+      // ✅ 3) UX message + route
+      if (!data.session) {
+        Alert.alert(
+          "تم إنشاء الحساب",
+          "تم إنشاء الحساب بنجاح ✅\nلو تفعيل البريد مفعّل، يرجى فحص البريد الإلكتروني ثم تسجيل الدخول."
+        );
+        router.replace("/sign-in");
+      } else {
+        Alert.alert("تم", "تم إنشاء الحساب بنجاح ✅");
+        router.replace("/(user)/home");
+      }
     } catch (err: any) {
       Alert.alert("خطأ", err?.message ?? "حدث خطأ غير متوقع");
     } finally {
@@ -270,6 +322,7 @@ const SignUpScreen = () => {
                 onPress={() => setShowPassword((v) => !v)}
                 style={styles.eyeBtn}
                 hitSlop={10}
+                disabled={loading}
               >
                 <FontAwesome
                   name={showPassword ? "eye-slash" : "eye"}
@@ -303,6 +356,7 @@ const SignUpScreen = () => {
                 onPress={() => setShowConfirm((v) => !v)}
                 style={styles.eyeBtn}
                 hitSlop={10}
+                disabled={loading}
               >
                 <FontAwesome
                   name={showConfirm ? "eye-slash" : "eye"}

@@ -15,7 +15,7 @@
     "splash": {
       "image": "./assets/images/splash-screen.png",
       "resizeMode": "cover",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "androidStatusBar": {
       "translucent": true,
@@ -70,7 +70,13 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "9b7554a7-eba8-4c14-a90c-b29c4f4c6142"
+        "projectId": "8cd5e950-1809-4416-919e-cfc88727c29d"
+      },
+      "expo-navigation-bar": {
+        "position": "absolute",
+        "backgroundColor": "#000000",
+        "barStyle": "light",
+        "borderColor": "#000000"
       }
     },
     "owner": "captian10"

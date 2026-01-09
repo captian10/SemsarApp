@@ -13,20 +13,22 @@ import React, {
   type PropsWithChildren,
 } from "react";
 
+import type { Tables, TablesInsert } from "database.types";
+
 /**
  * ✅ IMPORTANT
  * This MUST match the storageKey you use in createClient(..., { auth: { storageKey } })
- * Example (recommended in your supabase client):
- *   storageKey: "sb-semsarapp-auth"
  */
 const AUTH_STORAGE_KEY = "sb-semsarapp-auth";
 
+type DbRole = "user" | "admin";
+
 type Profile = {
   id: string;
-  role: string; // 'user' | 'admin' in DB (enum user_role)
-  full_name: string | null;
-  phone: string | null;
-  email: string | null; // comes from auth.user.email, not DB column
+  role: DbRole;
+  full_name: string;
+  phone: string; // ✅ string (your generated types say NOT nullable)
+  email: string | null;
 } | null;
 
 type AuthData = {
@@ -35,7 +37,6 @@ type AuthData = {
   loading: boolean;
   isAdmin: boolean;
 
-  // actions
   refetchProfile: () => Promise<void>;
   signOut: () => Promise<void>;
   resetAuth: () => Promise<void>;
@@ -51,26 +52,37 @@ const AuthContext = createContext<AuthData>({
   resetAuth: async () => {},
 });
 
-const safeText = (v: unknown, fallback: string | null = null) => {
-  const s = String(v ?? "").trim();
-  return s ? s : fallback;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const s = (v: unknown, fallback = "") => {
+  const x = String(v ?? "").trim();
+  return x ? x : fallback;
 };
 
-const withTimeout = <T,>(
-  promiseLike: PromiseLike<T>,
-  ms = 8000
-): Promise<T> => {
-  const p = Promise.resolve(promiseLike);
+const normalizeRole = (v: unknown): DbRole =>
+  String(v ?? "user").toLowerCase() === "admin" ? "admin" : "user";
 
-  let t: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<T>((_, reject) => {
-    t = setTimeout(() => reject(new Error("Profile fetch timeout")), ms);
-  });
+async function getMyProfileRow(userId: string) {
+  return supabase
+    .from("profiles")
+    .select("id, role, full_name, phone")
+    .eq("id", userId)
+    .maybeSingle<Tables<"profiles">>();
+}
 
-  return Promise.race([p, timeout]).finally(() => {
-    if (t) clearTimeout(t);
-  });
-};
+/**
+ * Sometimes profile row is created slightly later by trigger.
+ * We retry a bit.
+ */
+async function fetchProfileWithRetry(userId: string, tries = 6) {
+  for (let i = 0; i < tries; i++) {
+    const { data, error } = await getMyProfileRow(userId);
+    if (error) throw error;
+    if (data) return data;
+    await sleep(450);
+  }
+  return null;
+}
 
 export default function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
@@ -79,10 +91,9 @@ export default function AuthProvider({ children }: PropsWithChildren) {
   const [authLoading, setAuthLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
 
-  // prevents old fetch result from overriding newer one
+  // prevent older fetches from overriding newer ones
   const fetchIdRef = useRef(0);
 
-  // ✅ init session + subscribe to auth changes
   useEffect(() => {
     let mounted = true;
 
@@ -91,10 +102,10 @@ export default function AuthProvider({ children }: PropsWithChildren) {
         const { data, error } = await supabase.auth.getSession();
         if (!mounted) return;
 
-        if (error) console.log("getSession error:", error);
+        if (error) console.log("[auth] getSession error:", error.message);
         setSession(data.session ?? null);
       } catch (e: any) {
-        console.log("getSession crash:", e?.message ?? String(e));
+        console.log("[auth] getSession crash:", e?.message ?? String(e));
         setSession(null);
       } finally {
         if (mounted) setAuthLoading(false);
@@ -104,13 +115,13 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     const { data: sub } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
         setSession(newSession ?? null);
-        setProfile(null); // will refetch below
+        setProfile(null);
       }
     );
 
     return () => {
       mounted = false;
-      sub.subscription.unsubscribe();
+      sub?.subscription?.unsubscribe?.();
     };
   }, []);
 
@@ -127,104 +138,76 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     setProfileLoading(true);
 
     try {
-      // 1) Try read profile row (NOTE: no email column in table)
-      const res = await withTimeout(
-        supabase
-          .from("profiles")
-          .select("id, role, full_name, phone")
-          .eq("id", user.id)
-          .maybeSingle(),
-        8000
-      );
-
+      // 1) try read (retry a bit)
+      const row = await fetchProfileWithRetry(user.id, 6);
       if (myFetchId !== fetchIdRef.current) return;
 
-      const { data, error } = res;
-
-      if (error) {
-        console.log("profile fetch error:", error);
-        setProfile(null);
-        return;
-      }
-
-      if (data) {
+      if (row) {
         setProfile({
-          id: data.id,
-          role: String(data.role ?? "user"), // enum user_role: 'user' | 'admin'
-          full_name: data.full_name ?? null,
-          phone: data.phone ?? null,
-          email: safeText(user.email, null), // from auth, not DB
+          id: row.id,
+          role: normalizeRole((row as any).role),
+          full_name: s(row.full_name, "مستخدم"),
+          phone: s(row.phone, ""), // ✅ keep as string
+          email: s(user.email, "") || null,
         });
         return;
       }
 
-      // 2) If row missing -> upsert a default row (no email column)
+      // 2) fallback upsert minimal safe fields (NO role)
       const meta = (user.user_metadata as any) ?? {};
-      const payload = {
+
+      const minimal: TablesInsert<"profiles"> = {
         id: user.id,
-        role: "user",
-        full_name: safeText(meta.full_name, null),
-        phone: safeText(meta.phone, null),
+        full_name: s(meta.full_name, "مستخدم"),
+        phone: s(meta.phone, ""), // ✅ MUST be string (not null)
       };
 
-      const upRes = await withTimeout(
-        supabase
-          .from("profiles")
-          .upsert(payload, { onConflict: "id" })
-          .select("id, role, full_name, phone")
-          .maybeSingle(),
-        8000
-      );
+      const { data: up, error: upErr } = await supabase
+        .from("profiles")
+        .upsert(minimal, { onConflict: "id" })
+        .select("id, role, full_name, phone")
+        .maybeSingle<Tables<"profiles">>();
 
       if (myFetchId !== fetchIdRef.current) return;
 
-      const { data: up, error: upErr } = upRes;
-
       if (upErr) {
-        console.log("profiles upsert (missing row) error:", upErr);
+        console.log("[auth] profiles upsert fallback error:", upErr.message);
         setProfile(null);
         return;
       }
 
-      setProfile(
-        up
-          ? {
-              id: up.id,
-              role: String(up.role ?? "user"),
-              full_name: up.full_name ?? null,
-              phone: up.phone ?? null,
-              email: safeText(user.email, null),
-            }
-          : null
-      );
+      if (up) {
+        setProfile({
+          id: up.id,
+          role: normalizeRole((up as any).role),
+          full_name: s(up.full_name, "مستخدم"),
+          phone: s(up.phone, ""),
+          email: s(user.email, "") || null,
+        });
+      } else {
+        setProfile(null);
+      }
     } catch (e: any) {
       if (myFetchId !== fetchIdRef.current) return;
-      console.log("refetchProfile error:", e?.message ?? String(e));
+      console.log("[auth] refetchProfile error:", e?.message ?? String(e));
       setProfile(null);
     } finally {
       if (myFetchId === fetchIdRef.current) setProfileLoading(false);
     }
   }, [session?.user?.id, session?.user?.email]);
 
-  // ✅ fetch profile when session changes
   useEffect(() => {
     refetchProfile();
   }, [refetchProfile]);
 
-  const isAdmin = useMemo(() => {
-    const r = String(profile?.role ?? "")
-      .trim()
-      .toLowerCase();
-    return r === "admin";
-  }, [profile?.role]);
-
+  const isAdmin = useMemo(() => profile?.role === "admin", [profile?.role]);
   const loading = authLoading || (session ? profileLoading : false);
 
   const signOut = useCallback(async () => {
     try {
       await supabase.auth.signOut({ scope: "local" });
     } catch (e: any) {
-      console.log("signOut error:", e?.message ?? String(e));
+      console.log("[auth] signOut error:", e?.message ?? String(e));
     } finally {
       setSession(null);
       setProfile(null);
@@ -233,10 +216,6 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  /**
-   * ✅ Use this if app is stuck on ActivityIndicator after restart.
-   * Clears stored session in SecureStore + signs out.
-   */
   const resetAuth = useCallback(async () => {
     try {
       await supabase.auth.signOut({ scope: "local" });
@@ -244,14 +223,16 @@ export default function AuthProvider({ children }: PropsWithChildren) {
 
     try {
       await SecureStore.deleteItemAsync(AUTH_STORAGE_KEY);
-
-      // also delete chunked keys if they exist
+      // delete chunked keys if any
       for (let i = 0; i < 30; i++) {
         await SecureStore.deleteItemAsync(`${AUTH_STORAGE_KEY}.${i}`);
       }
       await SecureStore.deleteItemAsync(`${AUTH_STORAGE_KEY}.meta`);
     } catch (e: any) {
-      console.log("resetAuth securestore error:", e?.message ?? String(e));
+      console.log(
+        "[auth] resetAuth securestore error:",
+        e?.message ?? String(e)
+      );
     } finally {
       setSession(null);
       setProfile(null);

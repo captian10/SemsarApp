@@ -22,6 +22,11 @@ import { FONT } from "@/constants/Typography";
 import Button from "../../components/Button";
 import { THEME } from "../../constants/Colors";
 
+const isValidEmail = (email: string) => {
+  const e = String(email ?? "").trim();
+  return e.length >= 6 && e.includes("@") && e.includes(".");
+};
+
 const SignInScreen = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,17 +34,58 @@ const SignInScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // ✅ show "resend confirmation" CTA when needed
+  const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
+
   const canSubmit = useMemo(
     () => email.trim().length > 0 && password.trim().length > 0 && !loading,
     [email, password, loading]
   );
 
+  async function resendEmailConfirmation() {
+    const e = email.trim();
+
+    if (!isValidEmail(e)) {
+      Alert.alert("تنبيه", "اكتب بريد إلكتروني صحيح ثم جرّب مرة أخرى.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: e,
+      });
+
+      if (error) {
+        Alert.alert("خطأ", error.message);
+        return;
+      }
+
+      Alert.alert(
+        "تم الإرسال",
+        "تم إرسال رسالة التفعيل مرة أخرى ✅\nافتح بريدك (Inbox/Spam) واضغط على رابط التفعيل."
+      );
+    } catch (err: any) {
+      Alert.alert("خطأ", err?.message ?? "حدث خطأ غير متوقع");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function signInWithEmail() {
     const e = email.trim();
     const p = password.trim();
 
+    setNeedsEmailConfirm(false);
+
     if (!e || !p) {
       Alert.alert("تنبيه", "من فضلك اكتب البريد الإلكتروني وكلمة المرور.");
+      return;
+    }
+
+    if (!isValidEmail(e)) {
+      Alert.alert("تنبيه", "البريد الإلكتروني غير صحيح.");
       return;
     }
 
@@ -51,9 +97,27 @@ const SignInScreen = () => {
       });
 
       if (error) {
-        Alert.alert("خطأ", error.message);
+        const msg = String(error.message ?? "");
+
+        // ✅ Common Supabase message when email confirmation is required
+        const looksLikeNotConfirmed =
+          msg.toLowerCase().includes("email not confirmed") ||
+          msg.toLowerCase().includes("not confirmed");
+
+        if (looksLikeNotConfirmed) {
+          setNeedsEmailConfirm(true);
+          Alert.alert(
+            "الحساب غير مُفعّل",
+            "لازم تفعّل البريد الإلكتروني الأول.\nابحث عن رسالة التفعيل في Inbox أو Spam."
+          );
+          return;
+        }
+
+        Alert.alert("خطأ", msg);
         return;
       }
+
+      // ✅ success -> AuthProvider will route based on role
     } catch (err: any) {
       Alert.alert("خطأ", err?.message ?? "حدث خطأ غير متوقع");
     } finally {
@@ -101,7 +165,10 @@ const SignInScreen = () => {
               />
               <TextInput
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(v) => {
+                  setEmail(v);
+                  if (needsEmailConfirm) setNeedsEmailConfirm(false);
+                }}
                 placeholder="example@gmail.com"
                 placeholderTextColor={THEME.gray[100]}
                 style={[
@@ -140,6 +207,7 @@ const SignInScreen = () => {
                 onPress={() => setShowPassword((v) => !v)}
                 style={styles.eyeBtn}
                 hitSlop={10}
+                disabled={loading}
               >
                 <FontAwesome
                   name={showPassword ? "eye-slash" : "eye"}
@@ -155,6 +223,21 @@ const SignInScreen = () => {
             disabled={!canSubmit}
             text={loading ? "جاري تسجيل الدخول..." : "دخول"}
           />
+
+          {/* ✅ Resend confirmation */}
+          {needsEmailConfirm && (
+            <Pressable
+              onPress={resendEmailConfirmation}
+              disabled={loading}
+              style={({ pressed }) => [
+                styles.resendBtn,
+                pressed && !loading ? styles.pressed : null,
+                loading ? { opacity: 0.6 } : null,
+              ]}
+            >
+              <Text style={styles.resendText}>إعادة إرسال رسالة التفعيل</Text>
+            </Pressable>
+          )}
 
           <View style={styles.dividerRow}>
             <View style={styles.divider} />
@@ -204,6 +287,9 @@ type Styles = {
   inputWithTrailing: TextStyle;
   leadingIcon: TextStyle;
   eyeBtn: ViewStyle;
+
+  resendBtn: ViewStyle;
+  resendText: TextStyle;
 
   dividerRow: ViewStyle;
   divider: ViewStyle;
@@ -328,6 +414,21 @@ const styles = StyleSheet.create<Styles>({
     bottom: 0,
     justifyContent: "center",
     alignItems: "center",
+  },
+
+  resendBtn: {
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: "#EEF2FF",
+    borderWidth: 1,
+    borderColor: "#E0E7FF",
+  },
+  resendText: {
+    color: "#3730A3",
+    fontFamily: FONT.bold,
+    fontSize: 13,
+    textAlign: "center",
   },
 
   dividerRow: {

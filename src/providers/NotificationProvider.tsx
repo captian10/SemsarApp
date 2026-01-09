@@ -1,14 +1,14 @@
 // src/providers/NotificationProvider.tsx
-import { registerForPushNotificationsAsync } from "@lib/notifications";
-import { supabase } from "@lib/supabase";
-import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef, type PropsWithChildren } from "react";
-import { useAuth } from "./AuthProvider";
-// import { useRouter } from "expo-router"; // ✅ لو هتعمل navigation من هنا
+import * as Notifications from "expo-notifications";
+import { useRouter } from "expo-router";
 
-// Foreground behavior
+import { useAuth } from "./AuthProvider";
+import { registerAndSaveMyPushToken } from "@lib/notifications";
+
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
+  handleNotification: async (): Promise<Notifications.NotificationBehavior> => ({
+    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
     shouldShowBanner: true,
@@ -16,102 +16,100 @@ Notifications.setNotificationHandler({
   }),
 });
 
-export default function NotificationProvider({ children }: PropsWithChildren) {
-  const { session, profile } = useAuth();
-  // const router = useRouter(); // ✅ لو هتعمل navigation من هنا
+type PushData = {
+  kind?: "property" | "job";
+  id?: string;
 
-  // منع تكرار تسجيل التوكن لنفس اليوزر
+  // legacy support (optional)
+  type?: string;
+  propertyId?: string;
+  jobId?: string;
+};
+
+function navigateFromPush(router: ReturnType<typeof useRouter>, data: PushData) {
+  // ✅ new format: { kind, id }
+  if (data?.kind === "property" && data?.id) {
+    router.push({ pathname: "/(user)/home/[id]", params: { id: String(data.id) } });
+    return;
+  }
+  if (data?.kind === "job" && data?.id) {
+    router.push({ pathname: "/(user)/jobs/[id]", params: { id: String(data.id) } });
+    return;
+  }
+
+  // ✅ legacy
+  const type = String(data?.type ?? "");
+  if (type === "new_property" && data?.propertyId) {
+    router.push({
+      pathname: "/(user)/home/[id]",
+      params: { id: String(data.propertyId) },
+    });
+    return;
+  }
+  if (type === "new_job" && data?.jobId) {
+    router.push({
+      pathname: "/(user)/jobs/[id]",
+      params: { id: String(data.jobId) },
+    });
+    return;
+  }
+}
+
+export default function NotificationProvider({ children }: PropsWithChildren) {
+  const { session } = useAuth();
+  const router = useRouter();
+
   const lastRegisteredUserIdRef = useRef<string | null>(null);
 
-  // 1) Register + save token (per user)
+  // 1) Register + save token once per user
   useEffect(() => {
     const userId = session?.user?.id;
-    const profileId = profile?.id; // غالبًا نفس userId
+    if (!userId) return;
 
-    if (!userId || !profileId) return;
-
-    // لو اتسجل قبل كده لنفس اليوزر
     if (lastRegisteredUserIdRef.current === userId) return;
 
     let cancelled = false;
 
     (async () => {
-      try {
-        const token = await registerForPushNotificationsAsync();
-        if (cancelled) return;
+      const token = await registerAndSaveMyPushToken();
+      if (cancelled) return;
 
-        // ✅ Update فقط (بدون upsert) عشان TS ما يطلبش full_name/phone
-        const { error } = await supabase
-          .from("profiles")
-          .update({ expo_push_token: token })
-          .eq("id", profileId);
-
-        if (cancelled) return;
-
-        if (error) {
-          console.log("[push] Failed to save token:", error.message);
-          return;
-        }
-
-        lastRegisteredUserIdRef.current = userId;
-        console.log("[push] Token saved:", token);
-      } catch (err: any) {
-        console.log(
-          "[push] registration error:",
-          typeof err?.message === "string" ? err.message : String(err)
-        );
-      }
+      if (token) lastRegisteredUserIdRef.current = userId;
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id, profile?.id]);
+  }, [session?.user?.id]);
 
-  // 2) Listeners (once)
+  // 2) Listeners
   useEffect(() => {
-    const n1 = Notifications.addNotificationReceivedListener((notification) => {
-      console.log("[push] Notification received:", notification);
+    const onReceive = Notifications.addNotificationReceivedListener((n) => {
+      console.log("[push] received data:", n.request.content.data);
     });
 
-    const n2 = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        console.log("[push] Notification response:", response);
+    const onTap = Notifications.addNotificationResponseReceivedListener((res) => {
+      const data = (res?.notification?.request?.content?.data ?? {}) as PushData;
+      console.log("[push] tapped data:", data);
+      navigateFromPush(router, data);
+    });
 
-        const data: any = response?.notification?.request?.content?.data ?? {};
-        const type = String(data?.type ?? "");
-
-        // ⚠️ اختياري: لو عايز تفتح صفحات من هنا
-        // لو أنت بتعمل ده في hook تاني -> سيب ده مقفول
-        /*
-        if (type === "request" && data?.requestId) {
-          router.push({
-            pathname: "/(admin)/requests/[id]",
-            params: { id: String(data.requestId) },
-          });
-        }
-
-        if (type === "property" && data?.propertyId) {
-          router.push({
-            pathname: "/(admin)/home/[id]",
-            params: { id: String(data.propertyId) },
-          });
-        }
-        */
-      }
-    );
+    // 3) If app opened from killed state by tapping notification
+    (async () => {
+      const last = await Notifications.getLastNotificationResponseAsync();
+      const data = (last?.notification?.request?.content?.data ?? {}) as PushData;
+      navigateFromPush(router, data);
+    })();
 
     return () => {
-      n1.remove();
-      n2.remove();
+      onReceive.remove();
+      onTap.remove();
     };
-  }, []);
+  }, [router]);
 
-  // 3) Reset on logout
+  // 4) Reset on logout
   useEffect(() => {
-    if (!session?.user?.id) {
-      lastRegisteredUserIdRef.current = null;
-    }
+    if (!session?.user?.id) lastRegisteredUserIdRef.current = null;
   }, [session?.user?.id]);
 
   return <>{children}</>;

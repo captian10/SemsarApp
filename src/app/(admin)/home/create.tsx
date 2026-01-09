@@ -12,6 +12,7 @@ import {
   usePropertyContact,
   useUpsertPropertyContact,
 } from "@api/property-contacts";
+import { broadcastNewListing } from "@lib/notifications"; // ✅ NEW
 import { supabase } from "@lib/supabase";
 import { decode } from "base64-arraybuffer";
 import { randomUUID } from "expo-crypto";
@@ -916,6 +917,17 @@ export default function CreatePropertyScreen() {
             const pid = String(row?.id);
             await syncOwnerContact(pid);
             await syncPropertyImages(pid);
+
+            // ✅ NEW: broadcast push to all users (best-effort, don’t block save)
+void broadcastNewListing({
+  kind: "property",
+  id: pid,
+  title: payload.title,
+  city: payload.city ?? null,
+}).catch((e: any) =>
+  console.log("[push] broadcast property failed:", e?.message ?? String(e))
+);
+
 
             resetFields();
             setLoading(false);
