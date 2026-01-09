@@ -10,11 +10,11 @@ import {
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { FONT } from "@/constants/Typography";
 import { useJobs, type Job } from "@api/jobs";
-import { THEME } from "@constants/Colors";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useAppTheme } from "@providers/AppThemeProvider";
 
 function formatDate(iso?: string | null) {
   if (!iso) return "";
@@ -30,16 +30,24 @@ function formatDate(iso?: string | null) {
 function PrimaryButton({
   label,
   onPress,
+  colors,
 }: {
   label: string;
   onPress: () => void;
+  colors: {
+    primary: string;
+  };
 }) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.9 }]}
+      style={({ pressed }) => [
+        stylesStatic.primaryBtn,
+        { backgroundColor: colors.primary },
+        pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+      ]}
     >
-      <Text style={styles.primaryBtnText}>{label}</Text>
+      <Text style={stylesStatic.primaryBtnText}>{label}</Text>
     </Pressable>
   );
 }
@@ -47,62 +55,131 @@ function PrimaryButton({
 function MetaBadge({
   icon,
   text,
+  colors,
+  isDark,
 }: {
   icon: React.ComponentProps<typeof FontAwesome>["name"];
   text: string;
+  colors: {
+    primary: string;
+    text: string;
+  };
+  isDark: boolean;
 }) {
+  const bg = isDark ? "rgba(59,130,246,0.18)" : "rgba(59,130,246,0.10)";
+  const border = isDark ? "rgba(59,130,246,0.32)" : "rgba(59,130,246,0.22)";
+
   return (
-    <View style={styles.badge}>
-      <FontAwesome name={icon} size={12} color={THEME.primary} />
-      <Text style={styles.badgeText} numberOfLines={1}>
+    <View
+      style={[stylesStatic.badge, { backgroundColor: bg, borderColor: border }]}
+    >
+      <FontAwesome name={icon} size={12} color={colors.primary} />
+      <Text
+        style={[stylesStatic.badgeText, { color: colors.text }]}
+        numberOfLines={1}
+      >
         {text}
       </Text>
     </View>
   );
 }
 
-function JobCard({ job, onPress }: { job: Job; onPress: () => void }) {
+function JobCard({
+  job,
+  onPress,
+  colors,
+  isDark,
+}: {
+  job: Job;
+  onPress: () => void;
+  colors: {
+    surface: string;
+    text: string;
+    muted: string;
+    border: string;
+    primary: string;
+  };
+  isDark: boolean;
+}) {
   const hasMeta = !!(job.company || job.location);
   const metaLine = [job.company, job.location].filter(Boolean).join(" • ");
+
+  const ink = isDark ? "255,255,255" : "15,23,42";
+  const ink08 = `rgba(${ink},0.08)`;
+  const iconBg = isDark ? "rgba(255,255,255,0.07)" : "rgba(59,130,246,0.10)";
 
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      style={({ pressed }) => [
+        stylesStatic.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          shadowOpacity: isDark ? 0.28 : 0.05,
+        },
+        pressed && stylesStatic.cardPressed,
+      ]}
     >
       {/* Title row */}
-      <View style={styles.cardTopRow}>
-        <View style={styles.titleRow}>
-          <View style={styles.iconWrap}>
-            <FontAwesome name="briefcase" size={14} color={THEME.primary} />
+      <View style={stylesStatic.cardTopRow}>
+        <View style={stylesStatic.titleRow}>
+          <View
+            style={[
+              stylesStatic.iconWrap,
+              { backgroundColor: iconBg, borderColor: ink08 },
+            ]}
+          >
+            <FontAwesome name="briefcase" size={14} color={colors.primary} />
           </View>
 
-          <Text style={styles.jobTitle} numberOfLines={2}>
+          <Text
+            style={[stylesStatic.jobTitle, { color: colors.text }]}
+            numberOfLines={2}
+          >
             {job.title}
           </Text>
         </View>
 
-        <FontAwesome name="chevron-left" size={12} color={THEME.gray[100]} />
+        <FontAwesome name="chevron-left" size={12} color={colors.muted} />
       </View>
 
       {/* meta line */}
       {hasMeta ? (
-        <Text style={styles.metaLine} numberOfLines={1}>
+        <Text
+          style={[stylesStatic.metaLine, { color: colors.muted }]}
+          numberOfLines={1}
+        >
           {metaLine}
         </Text>
       ) : null}
 
       {/* badges */}
-      <View style={styles.badgesRow}>
+      <View style={stylesStatic.badgesRow}>
         {!!job.created_at && (
-          <MetaBadge icon="calendar" text={formatDate(job.created_at)} />
+          <MetaBadge
+            icon="calendar"
+            text={formatDate(job.created_at)}
+            colors={colors}
+            isDark={isDark}
+          />
         )}
-        {job.salary ? <MetaBadge icon="money" text={job.salary} /> : null}
+        {job.salary ? (
+          <MetaBadge
+            icon="money"
+            text={job.salary}
+            colors={colors}
+            isDark={isDark}
+          />
+        ) : null}
       </View>
 
       {/* description */}
       {job.description ? (
-        <Text style={styles.desc} numberOfLines={3}>
+        <Text
+          style={[stylesStatic.desc, { color: colors.muted }]}
+          numberOfLines={3}
+        >
           {job.description}
         </Text>
       ) : null}
@@ -112,15 +189,24 @@ function JobCard({ job, onPress }: { job: Job; onPress: () => void }) {
 
 export default function JobsScreen() {
   const router = useRouter();
+  const { colors, scheme } = useAppTheme();
+  const isDark = scheme === "dark";
+
   const { data, isLoading, isFetching, error, refetch } = useJobs();
   const list = useMemo(() => data ?? [], [data]);
 
+  const ink = isDark ? "255,255,255" : "15,23,42";
+  const ink06 = `rgba(${ink},0.06)`;
+  const pillBg = isDark ? "rgba(255,255,255,0.07)" : "rgba(59,130,246,0.10)";
+
   if (isLoading) {
     return (
-      <View style={styles.screen}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={THEME.primary} />
-          <Text style={styles.mutedText}>جاري تحميل الوظائف…</Text>
+      <View style={[stylesStatic.screen, { backgroundColor: colors.bg }]}>
+        <View style={stylesStatic.center}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[stylesStatic.mutedText, { color: colors.muted }]}>
+            جاري تحميل الوظائف…
+          </Text>
         </View>
       </View>
     );
@@ -128,30 +214,54 @@ export default function JobsScreen() {
 
   if (error) {
     return (
-      <View style={styles.screen}>
-        <View style={styles.center}>
-          <View style={styles.stateIcon}>
-            <FontAwesome name="warning" size={18} color={THEME.error} />
+      <View style={[stylesStatic.screen, { backgroundColor: colors.bg }]}>
+        <View style={stylesStatic.center}>
+          <View
+            style={[
+              stylesStatic.stateIcon,
+              { backgroundColor: pillBg, borderColor: ink06 },
+            ]}
+          >
+            <FontAwesome name="warning" size={18} color={colors.error} />
           </View>
-          <Text style={styles.stateTitle}>حصل خطأ</Text>
-          <Text style={styles.mutedText}>مش قادرين نحمل الوظائف دلوقتي.</Text>
-          <PrimaryButton label="إعادة المحاولة" onPress={refetch} />
+          <Text style={[stylesStatic.stateTitle, { color: colors.text }]}>
+            حصل خطأ
+          </Text>
+          <Text style={[stylesStatic.mutedText, { color: colors.muted }]}>
+            مش قادرين نحمل الوظائف دلوقتي.
+          </Text>
+          <PrimaryButton
+            label="إعادة المحاولة"
+            onPress={refetch}
+            colors={colors}
+          />
         </View>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={[stylesStatic.screen, { backgroundColor: colors.bg }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={stylesStatic.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>الوظائف</Text>
-          <Text style={styles.headerSub}>تابع أحدث الوظائف المتاحة</Text>
+          <Text style={[stylesStatic.headerTitle, { color: colors.text }]}>
+            الوظائف
+          </Text>
+          <Text style={[stylesStatic.headerSub, { color: colors.muted }]}>
+            تابع أحدث الوظائف المتاحة
+          </Text>
         </View>
 
-        <View style={styles.countPill}>
-          <Text style={styles.countText}>{list.length}</Text>
+        <View
+          style={[
+            stylesStatic.countPill,
+            { backgroundColor: pillBg, borderColor: ink06 },
+          ]}
+        >
+          <Text style={[stylesStatic.countText, { color: colors.primary }]}>
+            {list.length}
+          </Text>
         </View>
       </View>
 
@@ -162,29 +272,40 @@ export default function JobsScreen() {
           <JobCard
             job={item}
             onPress={() => router.push(`/(user)/jobs/${item.id}`)}
+            colors={colors}
+            isDark={isDark}
           />
         )}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         contentContainerStyle={[
-          styles.listContent,
-          list.length === 0 && styles.listContentEmpty,
+          stylesStatic.listContent,
+          list.length === 0 && stylesStatic.listContentEmpty,
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={!!isFetching}
             onRefresh={refetch}
-            tintColor={THEME.primary}
+            tintColor={colors.primary}
           />
         }
         ListEmptyComponent={
-          <View style={styles.center}>
-            <View style={styles.stateIcon}>
-              <FontAwesome name="briefcase" size={18} color={THEME.primary} />
+          <View style={stylesStatic.center}>
+            <View
+              style={[
+                stylesStatic.stateIcon,
+                { backgroundColor: pillBg, borderColor: ink06 },
+              ]}
+            >
+              <FontAwesome name="briefcase" size={18} color={colors.primary} />
             </View>
-            <Text style={styles.stateTitle}>مفيش وظائف حالياً</Text>
-            <Text style={styles.mutedText}>أول ما الوظائف تنزل هتظهر هنا.</Text>
-            <PrimaryButton label="تحديث" onPress={refetch} />
+            <Text style={[stylesStatic.stateTitle, { color: colors.text }]}>
+              مفيش وظائف حالياً
+            </Text>
+            <Text style={[stylesStatic.mutedText, { color: colors.muted }]}>
+              أول ما الوظائف تنزل هتظهر هنا.
+            </Text>
+            <PrimaryButton label="تحديث" onPress={refetch} colors={colors} />
           </View>
         }
       />
@@ -192,10 +313,9 @@ export default function JobsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesStatic = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: THEME.white[100],
     paddingHorizontal: 12,
     paddingTop: 12,
   },
@@ -209,14 +329,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: FONT.bold,
     fontSize: 18,
-    color: THEME.dark[100],
     textAlign: "right",
   },
   headerSub: {
     marginTop: 2,
     fontFamily: FONT.regular,
     fontSize: 12,
-    color: THEME.gray[100],
     textAlign: "right",
   },
 
@@ -224,9 +342,7 @@ const styles = StyleSheet.create({
     minWidth: 42,
     height: 36,
     borderRadius: 12,
-    backgroundColor: "#F2F7FF",
     borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.06)",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 10,
@@ -234,16 +350,10 @@ const styles = StyleSheet.create({
   countText: {
     fontFamily: FONT.bold,
     fontSize: 14,
-    color: THEME.primary,
   },
 
-  listContent: {
-    paddingBottom: 12,
-  },
-  listContentEmpty: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
+  listContent: { paddingBottom: 12 },
+  listContentEmpty: { flexGrow: 1, justifyContent: "center" },
 
   center: {
     flex: 1,
@@ -257,23 +367,19 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#F2F7FF",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.06)",
   },
   stateTitle: {
     fontFamily: FONT.bold,
     fontSize: 16,
-    color: THEME.dark[100],
     textAlign: "center",
   },
 
   mutedText: {
     fontFamily: FONT.regular,
     fontSize: 12,
-    color: THEME.gray[100],
     textAlign: "center",
     lineHeight: 18,
   },
@@ -281,7 +387,6 @@ const styles = StyleSheet.create({
   primaryBtn: {
     marginTop: 4,
     alignSelf: "stretch",
-    backgroundColor: THEME.primary,
     paddingVertical: 12,
     borderRadius: 14,
     alignItems: "center",
@@ -294,21 +399,15 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: THEME.white.DEFAULT,
     borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.08)",
     borderRadius: 16,
     padding: 14,
     shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
     elevation: 2,
   },
-  cardPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.995 }],
-  },
+  cardPressed: { opacity: 0.92, transform: [{ scale: 0.995 }] },
 
   cardTopRow: {
     flexDirection: "row-reverse",
@@ -316,30 +415,25 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
   },
-
   titleRow: {
     flex: 1,
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 10,
   },
-
   iconWrap: {
     width: 34,
     height: 34,
     borderRadius: 12,
-    backgroundColor: "#F2F7FF",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.06)",
   },
 
   jobTitle: {
     flex: 1,
     fontFamily: FONT.bold,
     fontSize: 15,
-    color: THEME.dark[100],
     textAlign: "right",
   },
 
@@ -347,7 +441,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontFamily: FONT.regular,
     fontSize: 12,
-    color: THEME.gray[100],
     textAlign: "right",
   },
 
@@ -365,12 +458,11 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: "#F2F7FF",
+    borderWidth: 1,
   },
   badgeText: {
     fontFamily: FONT.medium,
     fontSize: 12,
-    color: THEME.dark[100],
     maxWidth: 220,
     textAlign: "right",
   },
@@ -379,7 +471,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontFamily: FONT.regular,
     fontSize: 12,
-    color: THEME.gray[100],
     textAlign: "right",
     lineHeight: 18,
   },

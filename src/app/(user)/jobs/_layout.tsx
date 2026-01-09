@@ -1,21 +1,29 @@
-import { Stack } from "expo-router";
-import { THEME } from "@constants/Colors";
 import { FONT } from "@/constants/Typography";
+import { useAppTheme } from "@providers/AppThemeProvider";
+import { Stack } from "expo-router";
+import React from "react";
 
 export default function JobsStack() {
+  const t = useAppTheme();
+
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: THEME.white[100] },
+        // ✅ keep header hidden
+        headerShown: false,
+
+        // (حتى لو مخفي) نخلي الألوان مظبوطة لو ظهرت في أي transition/gesture
+        headerStyle: { backgroundColor: t.colors.bg },
         headerShadowVisible: false,
         headerTitleStyle: {
           fontFamily: FONT.bold,
-          color: THEME.dark[100],
+          color: t.colors.text,
           fontSize: 18,
         },
-        headerShown: false,
         headerTitleAlign: "center",
-        contentStyle: { backgroundColor: THEME.white[100] },
+
+        // ✅ this is the important part for dark mode
+        contentStyle: { backgroundColor: t.colors.bg },
       }}
     >
       <Stack.Screen

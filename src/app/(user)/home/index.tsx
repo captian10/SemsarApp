@@ -1,12 +1,12 @@
 import { FONT } from "@/constants/Typography";
+import HomeSectionRail from "@/components/HomeSectionRail";
+
 import {
   PROPERTY_TYPES,
   usePropertyList,
   type PropertyRow,
 } from "@api/properties";
 import PropertyCard from "@components/PropertyCard";
-import HomeSectionRail from "@/components/HomeSectionRail";
-import { THEME } from "@constants/Colors";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,6 +24,7 @@ import {
 } from "react-native";
 
 import { useMyFavorites, useToggleFavorite } from "@api/favorites";
+import { useAppTheme } from "@providers/AppThemeProvider";
 
 type PropertyType = (typeof PROPERTY_TYPES)[number];
 type FilterType = "الكل" | PropertyType;
@@ -89,35 +90,6 @@ const sortLabel = (sort: Sort) =>
     ? "السعر: الأقل → الأعلى"
     : "السعر: الأعلى → الأقل";
 
-/* ----------------- Chips ----------------- */
-
-function TypeChip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.chip,
-        active && styles.chipActive,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-/* ----------------- helpers: pick rails ----------------- */
-
 function pickLatest(list: PropertyRow[], n = 12) {
   return [...list]
     .sort(
@@ -133,15 +105,47 @@ function pickType(list: PropertyRow[], type: PropertyType, n = 12) {
   return list.filter((p: any) => normalize(p?.property_type) === t).slice(0, n);
 }
 
+type UIColors = {
+  background: string;
+  card: string;
+  text: string;
+  muted: string;
+  border: string;
+  primary: string;
+  error: string;
+};
+
 export default function HomeScreen() {
   const router = useRouter();
+
+  const theme = useAppTheme();
+  const isDark = theme.scheme === "dark";
+
+  // ✅ map AppTheme colors -> UIColors shape
+  const ui = useMemo<UIColors>(
+    () => ({
+      background: theme.colors.bg,
+      card: theme.colors.surface,
+      text: theme.colors.text,
+      muted: theme.colors.muted,
+      border: theme.colors.border,
+      primary: theme.colors.primary,
+      error: theme.colors.error,
+    }),
+    [theme]
+  );
+
+  // ✅ styles + tokens (no styles._ink45.color hacks)
+  const { styles, tokens } = useMemo(
+    () => createStyles(ui, isDark),
+    [ui, isDark]
+  );
+
   const { data, error, isLoading, isFetching, refetch } = usePropertyList();
 
-  // ✅ favorites
   const { data: favRows } = useMyFavorites();
   const toggleFav = useToggleFavorite();
 
-  // UI state
   const [type, setType] = useState<FilterType>("الكل");
   const [sort, setSort] = useState<Sort>("latest");
   const [query, setQuery] = useState("");
@@ -152,13 +156,11 @@ export default function HomeScreen() {
   const [tmpType, setTmpType] = useState<FilterType>(type);
   const [tmpSort, setTmpSort] = useState<Sort>(sort);
 
-  // ✅ Favorites set from DB
   const favoriteIds = useMemo(() => {
     const ids = (favRows ?? []).map((r: any) => String(r.property_id));
     return new Set(ids);
   }, [favRows]);
 
-  // ✅ Optimistic overrides (fast UI)
   const [optimisticFav, setOptimisticFav] = useState<Record<string, boolean>>(
     {}
   );
@@ -240,7 +242,6 @@ export default function HomeScreen() {
     refetch();
   }, [refetch]);
 
-  // ✅ Rails (no filters)
   const rails = useMemo(() => {
     const latest = pickLatest(list, 12);
 
@@ -288,20 +289,76 @@ export default function HomeScreen() {
     ].filter((s) => s.items && s.items.length);
   }, [list]);
 
+  function TypeChip({
+    label,
+    active,
+    onPress,
+  }: {
+    label: string;
+    active: boolean;
+    onPress: () => void;
+  }) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.chip,
+          active && styles.chipActive,
+          pressed && styles.pressed,
+        ]}
+      >
+        <Text style={[styles.chipText, active && styles.chipTextActive]}>
+          {label}
+        </Text>
+      </Pressable>
+    );
+  }
+
+  function RadioRow({
+    label,
+    active,
+    onPress,
+  }: {
+    label: string;
+    active: boolean;
+    onPress: () => void;
+  }) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.radioRow,
+          active && styles.radioRowActive,
+          pressed && styles.pressed,
+        ]}
+      >
+        <View style={styles.radioRight}>
+          <Text style={[styles.radioText, active && styles.radioTextActive]}>
+            {label}
+          </Text>
+        </View>
+
+        <View style={[styles.radioDot, active && styles.radioDotActive]}>
+          {active ? <View style={styles.radioDotInner} /> : null}
+        </View>
+      </Pressable>
+    );
+  }
+
   if (isLoading) {
     return (
       <View style={styles.screen}>
         <View style={styles.topBar}>
           <View style={styles.searchCard}>
             <View style={styles.searchWrap}>
-              <FontAwesome name="search" size={14} color="rgba(15,23,42,0.45)" />
+              <FontAwesome name="search" size={14} color={tokens.ink45} />
               <Text style={styles.searchPlaceholder}>ابحث…</Text>
             </View>
           </View>
         </View>
 
         <View style={styles.stateCard}>
-          <ActivityIndicator color={THEME.primary} />
+          <ActivityIndicator color={ui.primary} />
           <Text style={styles.stateTitle}>جاري تحميل العقارات</Text>
           <Text style={styles.stateText}>لحظة واحدة…</Text>
         </View>
@@ -316,12 +373,12 @@ export default function HomeScreen() {
         <View style={styles.searchCard}>
           <View style={styles.searchRow}>
             <View style={styles.searchWrap}>
-              <FontAwesome name="search" size={14} color="rgba(15,23,42,0.45)" />
+              <FontAwesome name="search" size={14} color={tokens.ink45} />
               <TextInput
                 value={query}
                 onChangeText={setQuery}
                 placeholder="ابحث بالعنوان / المدينة / العنوان التفصيلي"
-                placeholderTextColor={"rgba(15,23,42,0.35)"}
+                placeholderTextColor={tokens.ink35}
                 style={styles.searchInput}
               />
               {!!query && (
@@ -333,11 +390,7 @@ export default function HomeScreen() {
                   ]}
                   hitSlop={10}
                 >
-                  <FontAwesome
-                    name="times"
-                    size={12}
-                    color="rgba(15,23,42,0.55)"
-                  />
+                  <FontAwesome name="times" size={12} color={tokens.ink60} />
                 </Pressable>
               )}
             </View>
@@ -354,7 +407,7 @@ export default function HomeScreen() {
               <FontAwesome
                 name="sliders"
                 size={14}
-                color={filtersActive ? "#fff" : THEME.dark[100]}
+                color={filtersActive ? "#fff" : ui.text}
               />
             </Pressable>
           </View>
@@ -375,7 +428,7 @@ export default function HomeScreen() {
                 ]}
                 hitSlop={10}
               >
-                <FontAwesome name="undo" size={12} color={THEME.primary} />
+                <FontAwesome name="undo" size={12} color={ui.primary} />
                 <Text style={styles.resetPillText}>تصفير</Text>
               </Pressable>
             )}
@@ -417,7 +470,6 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       ) : filtersActive ? (
-        /* Grid */
         <FlatList
           key="grid-2"
           data={filtered}
@@ -448,13 +500,13 @@ export default function HomeScreen() {
             <RefreshControl
               refreshing={!!isFetching}
               onRefresh={onRefresh}
-              tintColor={THEME.primary}
+              tintColor={ui.primary}
             />
           }
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <View style={styles.emptyIconWrap}>
-                <FontAwesome name="search" size={18} color={THEME.primary} />
+                <FontAwesome name="search" size={18} color={ui.primary} />
               </View>
               <Text style={styles.emptyTitle}>مفيش نتائج</Text>
               <Text style={styles.emptySub}>
@@ -476,7 +528,6 @@ export default function HomeScreen() {
           ListFooterComponent={<View style={{ height: 16 }} />}
         />
       ) : (
-        /* Rails */
         <FlatList
           key="rails"
           data={rails}
@@ -486,7 +537,7 @@ export default function HomeScreen() {
             <RefreshControl
               refreshing={!!isFetching}
               onRefresh={onRefresh}
-              tintColor={THEME.primary}
+              tintColor={ui.primary}
             />
           }
           contentContainerStyle={{ paddingBottom: 14 }}
@@ -497,7 +548,7 @@ export default function HomeScreen() {
               <View style={{ marginBottom: isLatest ? 8 : 12 }}>
                 <HomeSectionRail
                   title={item.title}
-                  variant={isLatest ? "micro" : "compact"} // ✅ latest أصغر بكتير + الباقي نفس ستايلها
+                  variant={isLatest ? "micro" : "compact"}
                   data={item.items as any}
                   hrefBase="/(user)/home"
                   isFavorite={(id) => isFav(id)}
@@ -540,12 +591,12 @@ export default function HomeScreen() {
               ]}
               hitSlop={10}
             >
-              <FontAwesome name="times" size={14} color={THEME.dark[100]} />
+              <FontAwesome name="times" size={14} color={ui.text} />
             </Pressable>
           </View>
 
           <Text style={styles.sectionTitle}>نوع العقار</Text>
-          <View style={styles.radioWrap}>
+          <View>
             <RadioRow
               label="الكل"
               active={tmpType === "الكل"}
@@ -562,7 +613,7 @@ export default function HomeScreen() {
           </View>
 
           <Text style={styles.sectionTitle}>الترتيب</Text>
-          <View style={styles.radioWrap}>
+          <View>
             <RadioRow
               label="الأحدث"
               active={tmpSort === "latest"}
@@ -610,409 +661,401 @@ export default function HomeScreen() {
   );
 }
 
-function RadioRow({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.radioRow,
-        active && styles.radioRowActive,
-        pressed && styles.pressed,
-      ]}
-    >
-      <View style={styles.radioRight}>
-        <Text style={[styles.radioText, active && styles.radioTextActive]}>
-          {label}
-        </Text>
-      </View>
+function createStyles(colors: UIColors, isDark: boolean) {
+  const ink = isDark ? "255,255,255" : "15,23,42";
+  const ink03 = `rgba(${ink},0.03)`;
+  const ink06 = `rgba(${ink},0.06)`;
+  const ink08 = `rgba(${ink},0.08)`;
+  const ink10 = `rgba(${ink},0.10)`;
+  const ink25 = `rgba(${ink},0.25)`;
+  const ink35 = `rgba(${ink},0.35)`;
+  const ink45 = `rgba(${ink},0.45)`;
+  const ink60 = `rgba(${ink},0.60)`;
+  const ink70 = `rgba(${ink},0.70)`;
 
-      <View style={[styles.radioDot, active && styles.radioDotActive]}>
-        {active ? <View style={styles.radioDotInner} /> : null}
-      </View>
-    </Pressable>
-  );
+  const primarySoft = `rgba(59,130,246,${isDark ? "0.18" : "0.10"})`;
+  const primaryBorder = `rgba(59,130,246,${isDark ? "0.35" : "0.28"})`;
+
+  const styles = StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+
+    topBar: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8 },
+
+    searchCard: {
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 10,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.25 : 0.045,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: isDark ? 2 : 1,
+    },
+
+    searchRow: { flexDirection: "row-reverse", alignItems: "center" },
+
+    searchWrap: {
+      flex: 1,
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: ink08,
+      backgroundColor: isDark ? "rgba(255,255,255,0.06)" : ink03,
+    },
+
+    searchInput: {
+      flex: 1,
+      fontFamily: FONT.medium,
+      fontSize: 12.5,
+      color: colors.text,
+      textAlign: "right",
+      paddingVertical: 0,
+      marginLeft: 8,
+    },
+
+    searchPlaceholder: {
+      fontFamily: FONT.medium,
+      fontSize: 12.5,
+      color: ink35,
+      textAlign: "right",
+      flex: 1,
+    },
+
+    iconBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 999,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: ink06,
+      marginRight: 8,
+    },
+
+    filterBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: ink10,
+      marginLeft: 10,
+    },
+
+    filterBtnActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+
+    metaRow: {
+      marginTop: 8,
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+
+    metaText: {
+      flex: 1,
+      fontFamily: FONT.medium,
+      fontSize: 11.5,
+      color: ink60,
+      textAlign: "right",
+    },
+
+    resetPill: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: primarySoft,
+      borderWidth: 1,
+      borderColor: primaryBorder,
+    },
+
+    resetPillText: {
+      fontFamily: FONT.bold,
+      fontSize: 11.5,
+      color: colors.primary,
+      marginRight: 6,
+    },
+
+    chipsRow: {
+      marginTop: 8,
+      paddingBottom: 2,
+      paddingRight: 2,
+      paddingLeft: 2,
+    },
+
+    chip: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: ink10,
+      backgroundColor: isDark ? "rgba(255,255,255,0.06)" : ink03,
+      marginLeft: 8,
+    },
+
+    chipActive: {
+      backgroundColor: primarySoft,
+      borderColor: primaryBorder,
+    },
+
+    chipText: {
+      fontSize: 11.5,
+      fontFamily: FONT.bold,
+      color: colors.text,
+    },
+
+    chipTextActive: { color: colors.primary },
+
+    content: { paddingHorizontal: 12, paddingTop: 6, paddingBottom: 18 },
+    contentEmpty: { flexGrow: 1, justifyContent: "center" },
+
+    row: { justifyContent: "space-between" },
+    col: { flex: 1, maxWidth: "50%", paddingHorizontal: 6 },
+
+    stateCard: {
+      marginHorizontal: 12,
+      marginTop: 12,
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      alignItems: "center",
+    },
+
+    stateTitle: {
+      fontSize: 13,
+      fontFamily: FONT.bold,
+      color: colors.text,
+      textAlign: "center",
+      marginTop: 8,
+    },
+
+    stateText: {
+      fontSize: 11.5,
+      fontFamily: FONT.regular,
+      color: ink60,
+      textAlign: "center",
+      marginTop: 4,
+    },
+
+    errorIcon: { fontSize: 20 },
+    errorTitle: {
+      fontSize: 13.5,
+      fontFamily: FONT.bold,
+      color: colors.error,
+      textAlign: "center",
+      marginTop: 6,
+    },
+
+    primaryBtn: {
+      marginTop: 10,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      borderRadius: 14,
+      alignItems: "center",
+      width: "100%",
+    },
+
+    primaryBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 13 },
+
+    pressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
+
+    emptyWrap: { alignItems: "center", paddingHorizontal: 16 },
+    emptyIconWrap: {
+      width: 52,
+      height: 52,
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: primarySoft,
+      borderWidth: 1,
+      borderColor: primaryBorder,
+      marginBottom: 8,
+    },
+
+    emptyTitle: {
+      fontSize: 15,
+      fontFamily: FONT.bold,
+      color: colors.text,
+      textAlign: "center",
+      marginBottom: 6,
+    },
+
+    emptySub: {
+      fontSize: 12,
+      fontFamily: FONT.regular,
+      color: ink60,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+
+    ghostBtn: {
+      marginTop: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: primaryBorder,
+      backgroundColor: primarySoft,
+      alignItems: "center",
+      minWidth: 160,
+    },
+
+    ghostBtnText: {
+      color: colors.primary,
+      fontFamily: FONT.bold,
+      fontSize: 13,
+    },
+
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: isDark ? "rgba(0,0,0,0.65)" : "rgba(15,23,42,0.45)",
+    },
+
+    sheet: {
+      position: "absolute",
+      left: 12,
+      right: 12,
+      bottom: 12,
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: ink08,
+    },
+
+    sheetHeader: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 10,
+    },
+
+    sheetTitle: {
+      fontSize: 15,
+      fontFamily: FONT.bold,
+      color: colors.text,
+    },
+
+    sheetClose: {
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: ink06,
+    },
+
+    sectionTitle: {
+      marginTop: 8,
+      marginBottom: 8,
+      fontSize: 11.5,
+      fontFamily: FONT.bold,
+      color: ink70,
+      textAlign: "right",
+    },
+
+    radioRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: ink10,
+      backgroundColor: isDark ? "rgba(255,255,255,0.06)" : ink03,
+      marginBottom: 8,
+    },
+
+    radioRowActive: {
+      backgroundColor: primarySoft,
+      borderColor: primaryBorder,
+    },
+
+    radioRight: { flex: 1, alignItems: "flex-end" },
+
+    radioText: {
+      fontSize: 12.5,
+      fontFamily: FONT.bold,
+      color: colors.text,
+      textAlign: "right",
+    },
+
+    radioTextActive: { color: colors.primary },
+
+    radioDot: {
+      width: 18,
+      height: 18,
+      borderRadius: 999,
+      borderWidth: 2,
+      borderColor: ink25,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.background,
+      marginLeft: 10,
+    },
+
+    radioDotActive: { borderColor: colors.primary },
+
+    radioDotInner: {
+      width: 9,
+      height: 9,
+      borderRadius: 999,
+      backgroundColor: colors.primary,
+    },
+
+    sheetFooter: {
+      flexDirection: "row-reverse",
+      marginTop: 10,
+    },
+
+    sheetGhost: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: ink10,
+      backgroundColor: isDark ? "rgba(255,255,255,0.06)" : ink03,
+      alignItems: "center",
+      marginLeft: 10,
+    },
+
+    sheetGhostText: {
+      fontSize: 13,
+      fontFamily: FONT.bold,
+      color: colors.text,
+    },
+
+    sheetPrimary: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+    },
+
+    sheetPrimaryText: {
+      fontSize: 13,
+      fontFamily: FONT.bold,
+      color: "#fff",
+    },
+  });
+
+  return {
+    styles,
+    tokens: { ink35, ink45, ink60 },
+  };
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: THEME.white[100] },
-
-  topBar: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8 },
-
-  searchCard: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.06)",
-    padding: 10,
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.045,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 1,
-  },
-
-  searchRow: { flexDirection: "row-reverse", alignItems: "center" },
-
-  searchWrap: {
-    flex: 1,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.08)",
-    backgroundColor: "rgba(15,23,42,0.03)",
-  },
-
-  searchInput: {
-    flex: 1,
-    fontFamily: FONT.medium,
-    fontSize: 12.5,
-    color: THEME.dark[100],
-    textAlign: "right",
-    paddingVertical: 0,
-    marginLeft: 8,
-  },
-
-  searchPlaceholder: {
-    fontFamily: FONT.medium,
-    fontSize: 12.5,
-    color: "rgba(15,23,42,0.35)",
-    textAlign: "right",
-    flex: 1,
-  },
-
-  iconBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.06)",
-    marginRight: 8,
-  },
-
-  filterBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.10)",
-    marginLeft: 10,
-  },
-
-  filterBtnActive: {
-    backgroundColor: THEME.primary,
-    borderColor: THEME.primary,
-  },
-
-  metaRow: {
-    marginTop: 8,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  metaText: {
-    flex: 1,
-    fontFamily: FONT.medium,
-    fontSize: 11.5,
-    color: "rgba(15,23,42,0.60)",
-    textAlign: "right",
-  },
-
-  resetPill: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: "rgba(59,130,246,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(59,130,246,0.18)",
-  },
-
-  resetPillText: {
-    fontFamily: FONT.bold,
-    fontSize: 11.5,
-    color: THEME.primary,
-    marginRight: 6,
-  },
-
-  chipsRow: {
-    marginTop: 8,
-    paddingBottom: 2,
-    paddingRight: 2,
-    paddingLeft: 2,
-  },
-
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.10)",
-    backgroundColor: "rgba(15,23,42,0.03)",
-    marginLeft: 8,
-  },
-
-  chipActive: {
-    backgroundColor: "rgba(59,130,246,0.10)",
-    borderColor: "rgba(59,130,246,0.35)",
-  },
-
-  chipText: {
-    fontSize: 11.5,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-  },
-
-  chipTextActive: { color: THEME.primary },
-
-  content: { paddingHorizontal: 12, paddingTop: 6, paddingBottom: 18 },
-  contentEmpty: { flexGrow: 1, justifyContent: "center" },
-
-  row: { justifyContent: "space-between" },
-  col: { flex: 1, maxWidth: "50%", paddingHorizontal: 6 },
-
-  stateCard: {
-    marginHorizontal: 12,
-    marginTop: 12,
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.06)",
-    padding: 16,
-    alignItems: "center",
-  },
-
-  stateTitle: {
-    fontSize: 13,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-    textAlign: "center",
-    marginTop: 8,
-  },
-
-  stateText: {
-    fontSize: 11.5,
-    fontFamily: FONT.regular,
-    color: THEME.gray[100],
-    textAlign: "center",
-    marginTop: 4,
-  },
-
-  errorIcon: { fontSize: 20 },
-  errorTitle: {
-    fontSize: 13.5,
-    fontFamily: FONT.bold,
-    color: THEME.error,
-    textAlign: "center",
-    marginTop: 6,
-  },
-
-  primaryBtn: {
-    marginTop: 10,
-    backgroundColor: THEME.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderRadius: 14,
-    alignItems: "center",
-    width: "100%",
-  },
-
-  primaryBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 13 },
-
-  pressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
-
-  emptyWrap: { alignItems: "center", paddingHorizontal: 16 },
-  emptyIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(59,130,246,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(59,130,246,0.18)",
-    marginBottom: 8,
-  },
-
-  emptyTitle: {
-    fontSize: 15,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-    textAlign: "center",
-    marginBottom: 6,
-  },
-
-  emptySub: {
-    fontSize: 12,
-    fontFamily: FONT.regular,
-    color: THEME.gray[100],
-    textAlign: "center",
-    lineHeight: 18,
-  },
-
-  ghostBtn: {
-    marginTop: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(59,130,246,0.22)",
-    backgroundColor: "rgba(59,130,246,0.08)",
-    alignItems: "center",
-    minWidth: 160,
-  },
-
-  ghostBtnText: { color: THEME.primary, fontFamily: FONT.bold, fontSize: 13 },
-
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(15,23,42,0.45)",
-  },
-
-  sheet: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 12,
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.08)",
-  },
-
-  sheetHeader: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-
-  sheetTitle: {
-    fontSize: 15,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-  },
-
-  sheetClose: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.06)",
-  },
-
-  sectionTitle: {
-    marginTop: 8,
-    marginBottom: 8,
-    fontSize: 11.5,
-    fontFamily: FONT.bold,
-    color: "rgba(15,23,42,0.70)",
-    textAlign: "right",
-  },
-
-  radioWrap: {},
-
-  radioRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.10)",
-    backgroundColor: "rgba(15,23,42,0.03)",
-    marginBottom: 8,
-  },
-
-  radioRowActive: {
-    backgroundColor: "rgba(59,130,246,0.10)",
-    borderColor: "rgba(59,130,246,0.35)",
-  },
-
-  radioRight: { flex: 1, alignItems: "flex-end" },
-
-  radioText: {
-    fontSize: 12.5,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-    textAlign: "right",
-  },
-
-  radioTextActive: { color: THEME.primary },
-
-  radioDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: "rgba(15,23,42,0.25)",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#fff",
-    marginLeft: 10,
-  },
-
-  radioDotActive: { borderColor: THEME.primary },
-
-  radioDotInner: {
-    width: 9,
-    height: 9,
-    borderRadius: 999,
-    backgroundColor: THEME.primary,
-  },
-
-  sheetFooter: {
-    flexDirection: "row-reverse",
-    marginTop: 10,
-  },
-
-  sheetGhost: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.10)",
-    backgroundColor: "rgba(15,23,42,0.03)",
-    alignItems: "center",
-    marginLeft: 10,
-  },
-
-  sheetGhostText: {
-    fontSize: 13,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-  },
-
-  sheetPrimary: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: THEME.primary,
-    alignItems: "center",
-  },
-
-  sheetPrimaryText: {
-    fontSize: 13,
-    fontFamily: FONT.bold,
-    color: "#fff",
-  },
-});

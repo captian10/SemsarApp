@@ -27,13 +27,23 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FONT } from "@/constants/Typography";
 import RemoteImage from "@components/RemoteImage";
-import { THEME } from "@constants/Colors";
 
 import { usePropertyWithImages } from "@api/properties";
 import { usePropertyImages } from "@api/property-images";
 import { defaultPropertyImage } from "@components/PropertyCard";
+import { useAppTheme } from "@providers/AppThemeProvider";
 
 const AUTOSLIDE_MS = 2800;
+
+type UIColors = {
+  background: string;
+  card: string;
+  text: string;
+  muted: string;
+  border: string;
+  primary: string;
+  error: string;
+};
 
 const formatMoney = (n: unknown) => {
   const p = Number(n ?? 0);
@@ -104,21 +114,32 @@ const statusLabelAr = (s: unknown) => {
   return "—";
 };
 
-const statusColor = (s: unknown) => {
-  const v = String(s ?? "")
-    .trim()
-    .toLowerCase();
-  if (v === "available") return THEME.primary;
-  if (v === "rented") return "#EF4444";
-  if (v === "sold") return "#22C55E";
-  return THEME.dark?.[100] ?? "#0F172A";
-};
-
 export default function PropertyDetailsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: W } = useWindowDimensions();
+
+  const theme = useAppTheme();
+  const isDark = theme.scheme === "dark";
+
+  const ui = useMemo<UIColors>(
+    () => ({
+      background: theme.colors.bg,
+      card: theme.colors.surface,
+      text: theme.colors.text,
+      muted: theme.colors.muted,
+      border: theme.colors.border,
+      primary: theme.colors.primary,
+      error: theme.colors.error,
+    }),
+    [theme]
+  );
+
+  const { styles, tokens } = useMemo(
+    () => createStyles(ui, isDark),
+    [ui, isDark]
+  );
 
   const id = useMemo(() => {
     const raw = (params as any)?.id;
@@ -139,9 +160,9 @@ export default function PropertyDetailsScreen() {
     const rows = Array.isArray(imagesRows) ? imagesRows : [];
     const fromTable = rows
       .slice()
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-      .map((x) => ({ url: String(x?.url ?? "").trim() }))
-      .filter((x) => x.url.length > 0);
+      .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      .map((x: any) => ({ url: String(x?.url ?? "").trim() }))
+      .filter((x: any) => x.url.length > 0);
 
     const cover = String((property as any)?.cover_image ?? "").trim();
     const coverArr = cover ? [{ url: cover }] : [];
@@ -224,7 +245,16 @@ export default function PropertyDetailsScreen() {
 
   const statusValue = useMemo(() => (property as any)?.status, [property]);
   const status = useMemo(() => statusLabelAr(statusValue), [statusValue]);
-  const statusClr = useMemo(() => statusColor(statusValue), [statusValue]);
+
+  const statusClr = useMemo(() => {
+    const v = String(statusValue ?? "")
+      .trim()
+      .toLowerCase();
+    if (v === "available") return ui.primary;
+    if (v === "rented") return ui.error;
+    if (v === "sold") return "#22C55E";
+    return ui.text;
+  }, [statusValue, ui]);
 
   const description = useMemo(
     () => safeText((property as any)?.description, "لا يوجد وصف."),
@@ -235,7 +265,11 @@ export default function PropertyDetailsScreen() {
   const bathrooms = (property as any)?.bathrooms;
   const area = (property as any)?.area_sqm;
 
-  const AGENT_PHONE = "01012433451";
+  const phoneFromDb = String(
+    (property as any)?.phone ?? (property as any)?.contact_phone ?? ""
+  ).trim();
+
+  const AGENT_PHONE = phoneFromDb || "01012433451";
 
   const dial = useCallback(async (phoneNumber: string) => {
     const p = phoneNumber.replace(/\s+/g, "");
@@ -289,7 +323,7 @@ export default function PropertyDetailsScreen() {
   if (isLoading) {
     return (
       <View style={styles.stateWrap}>
-        <ActivityIndicator size="large" color={THEME.primary} />
+        <ActivityIndicator size="large" color={ui.primary} />
         <Text style={styles.stateText}>جاري تحميل بيانات العقار...</Text>
       </View>
     );
@@ -317,6 +351,7 @@ export default function PropertyDetailsScreen() {
       </View>
     );
   }
+
   const HERO_H = Math.min(560, Math.max(420, W * 0.72));
 
   return (
@@ -327,8 +362,7 @@ export default function PropertyDetailsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 170 + insets.bottom }}
       >
-        {/* ✅ HERO GALLERY */}
-
+        {/* HERO GALLERY */}
         <View style={[styles.heroWrap, { height: HERO_H }]}>
           <FlatList
             ref={mainRef as any}
@@ -382,7 +416,7 @@ export default function PropertyDetailsScreen() {
             }}
           />
 
-          {/* ✅ top overlay buttons */}
+          {/* top overlay buttons */}
           <View style={[styles.heroTopRow, { paddingTop: insets.top + 10 }]}>
             <Pressable
               onPress={() => router.back()}
@@ -405,7 +439,7 @@ export default function PropertyDetailsScreen() {
             )}
           </View>
 
-          {/* ✅ floating thumbnails */}
+          {/* floating thumbnails */}
           {images.length > 1 && (
             <View style={styles.heroThumbsFloat}>
               <FlatList
@@ -439,14 +473,14 @@ export default function PropertyDetailsScreen() {
           )}
         </View>
 
-        {/* ✅ BODY */}
+        {/* BODY */}
         <View style={styles.body}>
           <Text style={styles.title} numberOfLines={2}>
             {title}
           </Text>
 
           <View style={styles.locationRow}>
-            <FontAwesome name="map-marker" size={14} color={THEME.primary} />
+            <FontAwesome name="map-marker" size={14} color={ui.primary} />
             <Text style={styles.locationText} numberOfLines={2}>
               {city}
               {address ? ` • ${address}` : ""}
@@ -454,17 +488,37 @@ export default function PropertyDetailsScreen() {
           </View>
 
           <View style={styles.metaRow}>
-            <MetaPill icon="tag" text={type} />
-            <MetaPill icon="info-circle" text={status} color={statusClr} />
+            <MetaPill icon="tag" text={type} styles={styles} color={ui.text} />
+            <MetaPill
+              icon="info-circle"
+              text={status}
+              styles={styles}
+              color={statusClr}
+            />
 
             {hasPositiveNumber(area) && (
-              <MetaPill icon="arrows-alt" text={`${Number(area)} م²`} />
+              <MetaPill
+                icon="arrows-alt"
+                text={`${Number(area)} م²`}
+                styles={styles}
+                color={ui.text}
+              />
             )}
             {hasPositiveNumber(bedrooms) && (
-              <MetaPill icon="bed" text={`${Number(bedrooms)} غرف`} />
+              <MetaPill
+                icon="bed"
+                text={`${Number(bedrooms)} غرف`}
+                styles={styles}
+                color={ui.text}
+              />
             )}
             {hasPositiveNumber(bathrooms) && (
-              <MetaPill icon="bath" text={`${Number(bathrooms)} حمام`} />
+              <MetaPill
+                icon="bath"
+                text={`${Number(bathrooms)} حمام`}
+                styles={styles}
+                color={ui.text}
+              />
             )}
           </View>
 
@@ -518,247 +572,286 @@ function MetaPill({
   icon,
   text,
   color,
+  styles,
 }: {
   icon: any;
   text: string;
   color?: string;
+  styles: any;
 }) {
   return (
     <View style={styles.metaPill}>
-      <FontAwesome name={icon} size={12} color={color ?? THEME.dark[100]} />
-      <Text
-        style={[styles.metaText, color ? { color } : null]}
-        numberOfLines={1}
-      >
+      <FontAwesome name={icon} size={12} color={color} />
+      <Text style={[styles.metaText, { color }]} numberOfLines={1}>
         {text}
       </Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: THEME.white[100] },
+function createStyles(colors: UIColors, isDark: boolean) {
+  const ink = isDark ? "255,255,255" : "15,23,42";
+  const ink03 = `rgba(${ink},0.03)`;
+  const ink06 = `rgba(${ink},0.06)`;
+  const ink08 = `rgba(${ink},0.08)`;
+  const ink10 = `rgba(${ink},0.10)`;
 
-  stateWrap: {
-    flex: 1,
-    backgroundColor: THEME.white[100],
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-    gap: 10,
-  },
+  const bottomCardBg = isDark
+    ? "rgba(11,18,32,0.92)"
+    : "rgba(255,255,255,0.95)";
 
-  stateText: {
-    fontSize: 13,
-    color: THEME.gray[100],
-    fontFamily: FONT.regular,
-    textAlign: "center",
-  },
-  errorTitle: {
-    fontSize: 16,
-    color: THEME.error,
-    fontFamily: FONT.bold,
-    textAlign: "center",
-  },
-  retryBtn: {
-    marginTop: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: THEME.primary,
-    minWidth: 180,
-    alignItems: "center",
-  },
-  retryText: { color: "#fff", fontFamily: FONT.bold, fontSize: 13 },
-  pressed: { opacity: 0.9 },
+  const styles = StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
 
-  /* HERO */
-  heroWrap: { width: "100%", backgroundColor: "#000" },
-  heroImage: { width: "100%", height: "100%" } as ImageStyle,
+    stateWrap: {
+      flex: 1,
+      backgroundColor: colors.background,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+      gap: 10,
+    },
 
-  heroTopRow: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    top: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  heroIconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroCounterPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-  },
-  heroCounterText: { color: "#fff", fontFamily: FONT.bold, fontSize: 12 },
+    stateText: {
+      fontSize: 13,
+      color: colors.muted,
+      fontFamily: FONT.regular,
+      textAlign: "center",
+    },
 
-  heroThumbsFloat: { position: "absolute", left: 0, right: 0, bottom: -22 },
-  heroThumbsContent: { paddingHorizontal: 12, gap: 10 },
-  heroThumbItem: {
-    width: 64,
-    height: 44,
-    borderRadius: 14,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.26)",
-    backgroundColor: "rgba(255,255,255,0.10)",
-  },
-  heroThumbItemActive: { borderWidth: 2, borderColor: "#fff" },
-  heroThumbImg: { width: "100%", height: "100%" } as ImageStyle,
+    errorTitle: {
+      fontSize: 16,
+      color: colors.error,
+      fontFamily: FONT.bold,
+      textAlign: "center",
+    },
 
-  /* BODY */
-  body: {
-    paddingHorizontal: 12,
-    paddingTop: 34,
-    paddingBottom: 12,
-    gap: 12,
-  },
-  title: {
-    fontSize: 18,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-    textAlign: "right",
-  },
-  locationRow: {
-    width: "100%",
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-  },
-  locationText: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: FONT.medium,
-    color: THEME.gray[100],
-    textAlign: "right",
-    lineHeight: 18,
-  },
+    retryBtn: {
+      marginTop: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+      minWidth: 180,
+      alignItems: "center",
+    },
 
-  metaRow: {
-    width: "100%",
-    flexDirection: "row-reverse",
-    flexWrap: "wrap",
-    gap: 8,
-    justifyContent: "flex-start",
-  },
-  metaPill: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: "rgba(15,23,42,0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.06)",
-    maxWidth: "100%",
-  },
-  metaText: {
-    fontSize: 11,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-    textAlign: "right",
-  },
+    retryText: { color: "#fff", fontFamily: FONT.bold, fontSize: 13 },
 
-  descCard: {
-    backgroundColor: "#fff",
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.06)",
-    padding: 12,
-    gap: 8,
-    alignItems: "flex-end",
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-    textAlign: "right",
-  },
-  descText: {
-    width: "100%",
-    fontSize: 13,
-    fontFamily: FONT.regular,
-    color: THEME.gray[100],
-    textAlign: "right",
-    lineHeight: 20,
-  },
+    pressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
 
-  /* Bottom bar */
-  bottom: { position: "absolute", left: 12, right: 12, bottom: 12 },
-  bottomCard: {
-    backgroundColor: "rgba(255,255,255,0.95)",
-    borderRadius: 22,
-    padding: 12,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.06)",
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
-  },
-  bottomRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  bottomLabel: {
-    fontSize: 12,
-    fontFamily: FONT.medium,
-    color: THEME.gray[100],
-  },
-  bottomValue: { fontSize: 14, fontFamily: FONT.bold, color: THEME.primary },
+    /* HERO */
+    heroWrap: { width: "100%", backgroundColor: "#000" },
+    heroImage: { width: "100%", height: "100%" } as ImageStyle,
 
-  bottomBtns: { flexDirection: "row-reverse", gap: 10 },
-  bottomBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: THEME.primary,
-    alignItems: "center",
-  },
-  bottomBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 13 },
+    heroTopRow: {
+      position: "absolute",
+      left: 12,
+      right: 12,
+      top: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
 
-  bottomBtnGhost: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.12)",
-    backgroundColor: "rgba(15,23,42,0.03)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  bottomBtnGhostText: {
-    color: THEME.dark[100],
-    fontFamily: FONT.bold,
-    fontSize: 13,
-  },
-  waRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  copyHint: {
-    textAlign: "right",
-    color: THEME.gray[100],
-    fontFamily: FONT.regular,
-    fontSize: 11,
-  },
-});
+    heroIconBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 999,
+      backgroundColor: "rgba(0,0,0,0.35)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.18)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    heroCounterPill: {
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: "rgba(0,0,0,0.35)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.18)",
+    },
+
+    heroCounterText: { color: "#fff", fontFamily: FONT.bold, fontSize: 12 },
+
+    heroThumbsFloat: { position: "absolute", left: 0, right: 0, bottom: -22 },
+    heroThumbsContent: { paddingHorizontal: 12, gap: 10 },
+
+    heroThumbItem: {
+      width: 64,
+      height: 44,
+      borderRadius: 14,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.26)",
+      backgroundColor: "rgba(255,255,255,0.10)",
+    },
+
+    heroThumbItemActive: { borderWidth: 2, borderColor: "#fff" },
+    heroThumbImg: { width: "100%", height: "100%" } as ImageStyle,
+
+    /* BODY */
+    body: {
+      paddingHorizontal: 12,
+      paddingTop: 34,
+      paddingBottom: 12,
+      gap: 12,
+    },
+
+    title: {
+      fontSize: 18,
+      fontFamily: FONT.bold,
+      color: colors.text,
+      textAlign: "right",
+    },
+
+    locationRow: {
+      width: "100%",
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      gap: 8,
+    },
+
+    locationText: {
+      flex: 1,
+      fontSize: 12,
+      fontFamily: FONT.medium,
+      color: colors.muted,
+      textAlign: "right",
+      lineHeight: 18,
+    },
+
+    metaRow: {
+      width: "100%",
+      flexDirection: "row-reverse",
+      flexWrap: "wrap",
+      gap: 8,
+      justifyContent: "flex-start",
+    },
+
+    metaPill: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: isDark ? "rgba(255,255,255,0.06)" : ink03,
+      borderWidth: 1,
+      borderColor: ink06,
+      maxWidth: "100%",
+    },
+
+    metaText: {
+      fontSize: 11,
+      fontFamily: FONT.bold,
+      textAlign: "right",
+    },
+
+    descCard: {
+      backgroundColor: colors.card,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 12,
+      gap: 8,
+      alignItems: "flex-end",
+    },
+
+    sectionTitle: {
+      fontSize: 13,
+      fontFamily: FONT.bold,
+      color: colors.text,
+      textAlign: "right",
+    },
+
+    descText: {
+      width: "100%",
+      fontSize: 13,
+      fontFamily: FONT.regular,
+      color: colors.muted,
+      textAlign: "right",
+      lineHeight: 20,
+    },
+
+    /* Bottom bar */
+    bottom: { position: "absolute", left: 12, right: 12, bottom: 12 },
+
+    bottomCard: {
+      backgroundColor: bottomCardBg,
+      borderRadius: 22,
+      padding: 12,
+      gap: 10,
+      borderWidth: 1,
+      borderColor: ink08,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.28 : 0.12,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 4,
+    },
+
+    bottomRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+
+    bottomLabel: {
+      fontSize: 12,
+      fontFamily: FONT.medium,
+      color: colors.muted,
+    },
+
+    bottomValue: { fontSize: 14, fontFamily: FONT.bold, color: colors.primary },
+
+    bottomBtns: { flexDirection: "row-reverse", gap: 10 },
+
+    bottomBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    bottomBtnText: { color: "#fff", fontFamily: FONT.bold, fontSize: 13 },
+
+    bottomBtnGhost: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: ink10,
+      backgroundColor: isDark ? "rgba(255,255,255,0.06)" : ink03,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    bottomBtnGhostText: {
+      color: colors.text,
+      fontFamily: FONT.bold,
+      fontSize: 13,
+    },
+
+    waRow: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+
+    copyHint: {
+      marginTop: 6,
+      textAlign: "center",
+      color: colors.muted,
+      fontFamily: FONT.regular,
+      fontSize: 11,
+    },
+  });
+
+  return { styles, tokens: { ink03, ink06, ink08, ink10 } };
+}

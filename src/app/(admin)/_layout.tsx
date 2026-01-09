@@ -5,8 +5,8 @@ import { Platform, StyleSheet, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FONT } from "@/constants/Typography";
-import { THEME } from "@constants/Colors";
 import { useAuth } from "@providers/AuthProvider";
+import { useAppTheme } from "@providers/AppThemeProvider";
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>["name"];
@@ -18,6 +18,7 @@ function TabBarIcon(props: {
 export default function TabLayout() {
   const { isAdmin } = useAuth();
   const insets = useSafeAreaInsets();
+  const t = useAppTheme();
 
   if (!isAdmin) return <Redirect href="/(user)" />;
 
@@ -28,8 +29,8 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: THEME.primary,
-        tabBarInactiveTintColor: THEME.gray[100],
+        tabBarActiveTintColor: t.colors.primary,
+        tabBarInactiveTintColor: t.colors.muted,
         tabBarLabelStyle: {
           fontFamily: FONT.medium,
           fontSize: 11,
@@ -38,6 +39,8 @@ export default function TabLayout() {
         tabBarStyle: [
           styles.tabBar,
           {
+            backgroundColor: t.colors.tabBarBg,
+            borderTopColor: t.colors.tabBarBorder,
             paddingBottom: tabBarPaddingBottom,
             height: 58 + tabBarPaddingBottom,
           } as ViewStyle,
@@ -69,9 +72,7 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: THEME.white.DEFAULT,
     borderTopWidth: 1,
-    borderTopColor: "#EDEDED",
     paddingTop: 8,
     shadowColor: "#000",
     shadowOpacity: 0.06,

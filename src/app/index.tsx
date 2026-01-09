@@ -98,9 +98,7 @@ export default function Index() {
             >
               <View style={styles.btnRow}>
                 <FontAwesome name="home" size={16} color={THEME.primary} />
-                <Text style={styles.primaryOutlineText}>
-                  فتح واجهة المستخدم
-                </Text>
+                <Text style={styles.primaryOutlineText}>الدخول كمستخدم</Text>
               </View>
             </Pressable>
           </Link>

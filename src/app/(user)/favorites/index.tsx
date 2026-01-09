@@ -10,46 +10,16 @@ import {
 } from "react-native";
 
 import { FONT } from "@/constants/Typography";
-import { THEME } from "@constants/Colors";
-
 import { useMyFavorites, useToggleFavorite } from "@api/favorites";
 import PropertyCard from "@components/PropertyCard";
-
-function Button({
-  label,
-  onPress,
-  variant = "primary",
-  disabled,
-}: {
-  label: string;
-  onPress: () => void;
-  variant?: "primary" | "ghost";
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
-        styles.btnBase,
-        variant === "ghost" ? styles.btnGhost : styles.btnPrimary,
-        disabled && { opacity: 0.7 },
-        pressed && !disabled && styles.btnPressed,
-      ]}
-    >
-      <Text
-        style={[
-          styles.btnTextBase,
-          variant === "ghost" ? styles.btnTextGhost : styles.btnTextPrimary,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
+import { useAppTheme } from "@providers/AppThemeProvider";
 
 export default function FavoritesScreen() {
+  const { colors, scheme } = useAppTheme();
+  const isDark = scheme === "dark";
+
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+
   const { data, isLoading, isFetching, error, refetch } = useMyFavorites();
   const toggleFav = useToggleFavorite();
 
@@ -58,11 +28,53 @@ export default function FavoritesScreen() {
 
   const removingId = toggleFav.variables?.propertyId;
 
+  function Button({
+    label,
+    onPress,
+    variant = "primary",
+    disabled,
+  }: {
+    label: string;
+    onPress: () => void;
+    variant?: "primary" | "ghost";
+    disabled?: boolean;
+  }) {
+    const ink = isDark ? "255,255,255" : "15,23,42";
+    const ink10 = `rgba(${ink},0.10)`;
+    const ghostBg = isDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.03)";
+
+    const isGhost = variant === "ghost";
+
+    return (
+      <Pressable
+        onPress={onPress}
+        disabled={disabled}
+        style={({ pressed }) => [
+          styles.btnBase,
+          isGhost
+            ? { backgroundColor: ghostBg, borderWidth: 1, borderColor: ink10 }
+            : { backgroundColor: colors.primary },
+          disabled && { opacity: 0.65 },
+          pressed && !disabled && styles.pressed,
+        ]}
+      >
+        <Text
+          style={[
+            styles.btnTextBase,
+            isGhost ? { color: colors.text } : { color: "#fff" },
+          ]}
+        >
+          {label}
+        </Text>
+      </Pressable>
+    );
+  }
+
   if (isLoading) {
     return (
       <View style={styles.screen}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={THEME.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.muted}>جاري تحميل المفضلة…</Text>
         </View>
       </View>
@@ -74,6 +86,7 @@ export default function FavoritesScreen() {
       <View style={styles.screen}>
         <View style={styles.topRow}>
           <Text style={styles.title}>المفضلة</Text>
+          <Text style={styles.subTitle}>تعذر تحميل البيانات</Text>
         </View>
 
         <View style={styles.center}>
@@ -90,11 +103,10 @@ export default function FavoritesScreen() {
 
   return (
     <View style={styles.screen}>
-      {/* simple header */}
+      {/* header */}
       <View style={styles.topRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.subTitle}>عدد العناصر: {count}</Text>
-        </View>
+        <Text style={styles.title}>المفضلة</Text>
+        <Text style={styles.subTitle}>عدد العناصر: {count}</Text>
       </View>
 
       <FlatList
@@ -114,7 +126,7 @@ export default function FavoritesScreen() {
               <PropertyCard
                 hrefBase="/(user)/home"
                 property={item.property}
-                isFavorite={true}
+                isFavorite
                 onToggleFavorite={(propertyId) => {
                   // ✅ في صفحة المفضلة: القلب = إزالة فقط
                   toggleFav.mutate({ propertyId, next: false });
@@ -134,7 +146,7 @@ export default function FavoritesScreen() {
           <RefreshControl
             refreshing={!!isFetching}
             onRefresh={refetch}
-            tintColor={THEME.primary}
+            tintColor={colors.primary}
           />
         }
         ListEmptyComponent={
@@ -149,119 +161,106 @@ export default function FavoritesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: THEME.white[100],
-    paddingHorizontal: 12,
-    paddingTop: 12,
+function createStyles(
+  colors: {
+    bg: string;
+    surface: string;
+    text: string;
+    muted: string;
+    border: string;
+    primary: string;
+    error: string;
+    tabBarBg: string;
+    tabBarBorder: string;
   },
+  isDark: boolean
+) {
+  const ink = isDark ? "255,255,255" : "15,23,42";
+  const ink60 = `rgba(${ink},0.60)`;
 
-  topRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 12,
-  },
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      paddingHorizontal: 12,
+      paddingTop: 12,
+    },
 
-  title: {
-    fontSize: 20,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-    textAlign: "right",
-  },
+    topRow: {
+      flexDirection: "row-reverse",
+      alignItems: "flex-end",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 12,
+    },
 
-  subTitle: {
-    marginTop: 2,
-    fontSize: 13,
-    fontFamily: FONT.regular,
-    color: THEME.gray[100],
-    textAlign: "right",
-  },
+    title: {
+      fontSize: 18,
+      fontFamily: FONT.bold,
+      color: colors.text,
+      textAlign: "right",
+    },
 
-  refreshChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.10)",
-    backgroundColor: "#fff",
-  },
+    subTitle: {
+      fontSize: 12.5,
+      fontFamily: FONT.medium,
+      color: ink60,
+      textAlign: "left",
+    },
 
-  refreshChipText: {
-    fontSize: 13,
-    fontFamily: FONT.medium,
-    color: THEME.dark[100],
-  },
+    listContent: {
+      paddingBottom: 10,
+    },
 
-  listContent: {
-    paddingBottom: 10,
-  },
+    listContentEmpty: {
+      flexGrow: 1,
+      justifyContent: "center",
+    },
 
-  listContentEmpty: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      paddingHorizontal: 16,
+    },
 
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingHorizontal: 16,
-  },
+    emptyTitle: {
+      fontSize: 15,
+      fontFamily: FONT.bold,
+      color: colors.text,
+      textAlign: "center",
+    },
 
-  emptyTitle: {
-    fontSize: 15,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-    textAlign: "center",
-  },
+    muted: {
+      fontSize: 13,
+      fontFamily: FONT.regular,
+      color: ink60,
+      textAlign: "center",
+      lineHeight: 18,
+    },
 
-  muted: {
-    fontSize: 13,
-    fontFamily: FONT.regular,
-    color: THEME.gray[100],
-    textAlign: "center",
-    lineHeight: 18,
-  },
+    error: {
+      fontSize: 13,
+      fontFamily: FONT.medium,
+      color: colors.error,
+      textAlign: "center",
+    },
 
-  error: {
-    fontSize: 13,
-    fontFamily: FONT.medium,
-    color: THEME.error,
-    textAlign: "center",
-  },
+    btnBase: {
+      marginTop: 4,
+      alignSelf: "stretch",
+      paddingVertical: 12,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
 
-  btnBase: {
-    marginTop: 4,
-    alignSelf: "stretch",
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    btnTextBase: {
+      fontFamily: FONT.bold,
+      fontSize: 14,
+    },
 
-  btnPrimary: {
-    backgroundColor: THEME.primary,
-  },
-  btnGhost: {
-    backgroundColor: THEME.primary,
-  },
-
-  btnTextBase: {
-    color: "#fff",
-    fontFamily: FONT.bold,
-    fontSize: 14,
-  },
-  btnTextPrimary: {
-    color: "#fff",
-  },
-  btnTextGhost: {
-    color: "#fff",
-  },
-
-  btnPressed: {
-    opacity: 0.9,
-  },
-});
+    pressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
+  });
+}

@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
+import * as Clipboard from "expo-clipboard";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -7,16 +9,15 @@ import {
   StyleSheet,
   Text,
   View,
-  type TextStyle,
-  type ViewStyle,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import * as Clipboard from "expo-clipboard";
-import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
-import { supabase } from "@lib/supabase";
-import { THEME } from "@constants/Colors";
 import { FONT } from "@/constants/Typography";
+import { supabase } from "@lib/supabase";
+import { useAppTheme } from "@providers/AppThemeProvider";
 
 const DEV_PHONE = "01012433451";
 
@@ -24,6 +25,15 @@ const safeString = (v: any, fallback = "") =>
   typeof v === "string" ? v.trim() : fallback;
 
 export default function Profile() {
+  const { colors, scheme } = useAppTheme();
+  const isDark = scheme === "dark";
+  const insets = useSafeAreaInsets();
+
+  const styles = useMemo(
+    () => createStyles(colors, isDark, insets.bottom),
+    [colors, isDark, insets.bottom]
+  );
+
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
 
@@ -101,7 +111,7 @@ export default function Profile() {
     };
   }, []);
 
-  const handleSignOut = async () => {
+  const handleSignOut = useCallback(() => {
     Alert.alert("تسجيل الخروج", "هل تريد تسجيل الخروج الآن؟", [
       { text: "إلغاء", style: "cancel" },
       {
@@ -119,23 +129,28 @@ export default function Profile() {
         },
       },
     ]);
-  };
+  }, []);
 
-  const dial = async (phoneNumber: string) => {
+  const dial = useCallback(async (phoneNumber: string) => {
+    const p = String(phoneNumber ?? "").replace(/\s+/g, "");
+    if (!p) return;
+
     try {
-      await Linking.openURL(`tel:${phoneNumber}`);
+      await Linking.openURL(`tel:${p}`);
     } catch {
       Alert.alert("خطأ", "لم نستطع فتح الاتصال على هذا الجهاز.");
     }
-  };
+  }, []);
 
-  const copy = async (phoneNumber: string, title = "تم النسخ") => {
-    await Clipboard.setStringAsync(phoneNumber);
-    Alert.alert(title, `تم نسخ الرقم: ${phoneNumber}`);
-  };
+  const copy = useCallback(async (text: string, title = "تم النسخ") => {
+    const t = String(text ?? "").trim();
+    if (!t) return;
+    await Clipboard.setStringAsync(t);
+    Alert.alert(title, `تم نسخ: ${t}`);
+  }, []);
 
   // ✅ WhatsApp to developer (Egypt numbers start with 0, WhatsApp needs country code)
-  const openWhatsAppDev = async () => {
+  const openWhatsAppDev = useCallback(async () => {
     const raw = DEV_PHONE.replace(/\D/g, ""); // 01012433451
     const international = `20${raw.replace(/^0/, "")}`; // 201012433451
 
@@ -156,7 +171,7 @@ export default function Profile() {
     } catch {
       Alert.alert("واتساب غير متاح", "لم نستطع فتح واتساب على هذا الجهاز.");
     }
-  };
+  }, []);
 
   return (
     <SafeAreaView edges={["top"]} style={styles.screen}>
@@ -170,7 +185,7 @@ export default function Profile() {
         <View style={styles.card}>
           {fetching ? (
             <View style={styles.loadingRow}>
-              <ActivityIndicator color={THEME.primary} />
+              <ActivityIndicator color={colors.primary} />
               <Text style={styles.loadingText}>جاري تحميل البيانات...</Text>
             </View>
           ) : (
@@ -222,7 +237,7 @@ export default function Profile() {
         </View>
       </View>
 
-      {/* ✅ Bottom developer bar (above navigation bar) */}
+      {/* ✅ Bottom developer bar (safe with bottom inset) */}
       <View style={styles.devBar}>
         <Text style={styles.devText} numberOfLines={2}>
           تم برمجة التطبيق بواسطة Drax للتواصل مع المبرمج
@@ -243,7 +258,6 @@ export default function Profile() {
             <Text style={styles.devBtnText}>نسخ</Text>
           </Pressable>
 
-          {/* ✅ WhatsApp (clean brand icon) */}
           <Pressable
             onPress={openWhatsAppDev}
             style={({ pressed }) => [styles.devBtn, pressed && styles.pressed]}
@@ -269,211 +283,181 @@ export default function Profile() {
   );
 }
 
-type Styles = {
-  screen: ViewStyle;
-  content: ViewStyle;
-
-  header: ViewStyle;
-  title: TextStyle;
-  subtitle: TextStyle;
-
-  card: ViewStyle;
-
-  field: ViewStyle;
-  label: TextStyle;
-  value: TextStyle;
-
-  divider: ViewStyle;
-
-  logoutBtn: ViewStyle;
-  logoutText: TextStyle;
-
-  loadingRow: ViewStyle;
-  loadingText: TextStyle;
-
-  devBar: ViewStyle;
-  devText: TextStyle;
-  devActions: ViewStyle;
-  devBtn: ViewStyle;
-  devBtnText: TextStyle;
-  devPhoneChip: ViewStyle;
-  devPhoneText: TextStyle;
-
-  waInner: ViewStyle;
-  waText: TextStyle;
-
-  pressed: ViewStyle;
-};
-
-const styles = StyleSheet.create<Styles>({
-  screen: {
-    flex: 1,
-    backgroundColor: THEME.white[100],
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    alignItems: "stretch",
+function createStyles(
+  colors: {
+    bg: string;
+    surface: string;
+    text: string;
+    muted: string;
+    border: string;
+    primary: string;
+    error: string;
+    tabBarBg: string;
+    tabBarBorder: string;
   },
+  isDark: boolean,
+  bottomInset: number
+) {
+  const ink = isDark ? "255,255,255" : "15,23,42";
+  const ink06 = `rgba(${ink},0.06)`;
+  const ink10 = `rgba(${ink},0.10)`;
 
-  content: {
-    flex: 1,
-    alignItems: "flex-end",
-  },
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      alignItems: "stretch",
+    },
 
-  header: {
-    width: "100%",
-    gap: 4,
-    marginBottom: 12,
-    alignItems: "flex-end",
-  },
-  title: {
-    fontSize: 20,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-    textAlign: "right",
-  },
-  subtitle: {
-    fontSize: 12,
-    fontFamily: FONT.regular,
-    color: THEME.gray[100],
-    textAlign: "right",
-  },
+    content: { flex: 1, alignItems: "flex-end" },
 
-  card: {
-    width: "100%",
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.06)",
-    padding: 14,
-    alignItems: "flex-end",
-    gap: 8,
-  },
+    header: {
+      width: "100%",
+      gap: 4,
+      marginBottom: 12,
+      alignItems: "flex-end",
+    },
+    title: {
+      fontSize: 20,
+      fontFamily: FONT.bold,
+      color: colors.text,
+      textAlign: "right",
+    },
+    subtitle: {
+      fontSize: 12,
+      fontFamily: FONT.regular,
+      color: colors.muted,
+      textAlign: "right",
+    },
 
-  field: {
-    width: "100%",
-    alignItems: "flex-end",
-  },
-  label: {
-    fontSize: 12,
-    fontFamily: FONT.regular,
-    color: THEME.gray[100],
-    textAlign: "right",
-    marginBottom: 4,
-  },
-  value: {
-    width: "100%",
-    fontSize: 14,
-    fontFamily: FONT.medium,
-    color: THEME.dark[100],
-    textAlign: "right",
-  },
+    card: {
+      width: "100%",
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14,
+      alignItems: "flex-end",
+      gap: 8,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.25 : 0.06,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: isDark ? 3 : 2,
+    },
 
-  divider: {
-    width: "100%",
-    height: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.06)",
-  },
+    field: { width: "100%", alignItems: "flex-end" },
+    label: {
+      fontSize: 12,
+      fontFamily: FONT.regular,
+      color: colors.muted,
+      textAlign: "right",
+      marginBottom: 4,
+    },
+    value: {
+      width: "100%",
+      fontSize: 14,
+      fontFamily: FONT.medium,
+      color: colors.text,
+      textAlign: "right",
+    },
 
-  logoutBtn: {
-    width: "100%",
-    paddingVertical: 12,
-    backgroundColor: THEME.primary,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 8,
-  },
-  logoutText: {
-    fontSize: 14,
-    fontFamily: FONT.medium,
-    color: "#fff",
-    textAlign: "center",
-  },
+    divider: { width: "100%", height: 1, backgroundColor: ink06 },
 
-  loadingRow: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 20,
-    width: "100%",
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: FONT.regular,
-    color: THEME.gray[100],
-    textAlign: "right",
-  },
+    logoutBtn: {
+      width: "100%",
+      paddingVertical: 12,
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 8,
+    },
+    logoutText: {
+      fontSize: 14,
+      fontFamily: FONT.bold,
+      color: "#fff",
+      textAlign: "center",
+    },
 
-  devBar: {
-    width: "100%",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(15, 23, 42, 0.06)",
-    paddingTop: 10,
-    paddingBottom: 10,
-    gap: 8,
-    backgroundColor: THEME.white[100],
-  },
+    loadingRow: {
+      flexDirection: "row",
+      gap: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 20,
+      width: "100%",
+    },
+    loadingText: {
+      fontSize: 14,
+      fontFamily: FONT.regular,
+      color: colors.muted,
+      textAlign: "right",
+    },
 
-  devText: {
-    fontSize: 12,
-    fontFamily: FONT.regular,
-    color: THEME.gray[100],
-    textAlign: "center",
-  },
+    devBar: {
+      width: "100%",
+      borderTopWidth: 1,
+      borderTopColor: ink06,
+      paddingTop: 10,
+      paddingBottom: 10,
+      gap: 8,
+      backgroundColor: colors.bg,
+    },
 
-  devActions: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    flexWrap: "wrap",
-  },
+    devText: {
+      fontSize: 12,
+      fontFamily: FONT.regular,
+      color: colors.muted,
+      textAlign: "center",
+    },
 
-  devBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.10)",
-    backgroundColor: "#fff",
-  },
+    devActions: {
+      flexDirection: "row-reverse",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      flexWrap: "wrap",
+    },
 
-  devBtnText: {
-    fontSize: 12,
-    fontFamily: FONT.medium,
-    color: THEME.primary,
-    textAlign: "center",
-  },
+    devBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
 
-  devPhoneChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.10)",
-    backgroundColor: "rgba(15, 23, 42, 0.03)",
-  },
+    devBtnText: {
+      fontSize: 12,
+      fontFamily: FONT.bold,
+      color: colors.primary,
+      textAlign: "center",
+    },
 
-  devPhoneText: {
-    fontSize: 12,
-    fontFamily: FONT.bold,
-    color: THEME.dark[100],
-  },
+    devPhoneChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: ink10,
+      backgroundColor: isDark
+        ? "rgba(255,255,255,0.06)"
+        : "rgba(15,23,42,0.03)",
+    },
 
-  waInner: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 6,
-  },
+    devPhoneText: {
+      fontSize: 12,
+      fontFamily: FONT.bold,
+      color: colors.text,
+    },
 
-  waText: {
-    fontSize: 12,
-    fontFamily: FONT.medium,
-    color: THEME.dark[100],
-  },
+    waInner: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
+    waText: { fontSize: 12, fontFamily: FONT.bold, color: colors.text },
 
-  pressed: {
-    opacity: 0.7,
-  },
-});
+    pressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
+  });
+}

@@ -1,5 +1,5 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams } from "expo-router";
 import React, { useMemo } from "react";
 import {
   ActivityIndicator,
@@ -11,11 +11,11 @@ import {
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { FONT } from "@/constants/Typography";
 import { useJob } from "@api/jobs";
-import { THEME } from "@constants/Colors";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useAppTheme } from "@providers/AppThemeProvider";
 
 function formatDate(iso?: string | null) {
   if (!iso) return "";
@@ -29,21 +29,32 @@ function formatDate(iso?: string | null) {
 }
 
 export default function JobDetailsScreen() {
-  const router = useRouter(); // ✅ still used for refresh route stack etc.
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { colors, scheme } = useAppTheme();
+  const isDark = scheme === "dark";
 
-  const { data: job, isLoading, error, refetch } = useJob(id);
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = useMemo(() => {
+    const raw = Array.isArray(params?.id) ? params.id[0] : params?.id;
+    return typeof raw === "string" ? raw.trim() : "";
+  }, [params?.id]);
+
+  const { data: job, isLoading, error, refetch, isFetching } = useJob(id);
 
   const meta = useMemo(() => {
     const parts = [job?.company, job?.location].filter(Boolean) as string[];
     return parts.join(" • ");
   }, [job?.company, job?.location]);
 
+  const ink = isDark ? "255,255,255" : "15,23,42";
+  const ink06 = `rgba(${ink},0.06)`;
+  const ink08 = `rgba(${ink},0.08)`;
+
+  const badgeBg = isDark ? "rgba(59,130,246,0.18)" : "rgba(59,130,246,0.10)";
+  const badgeBorder = isDark ? "rgba(59,130,246,0.32)" : "rgba(59,130,246,0.22)";
+
   const openWhatsApp = async () => {
     const phone = "201012433451";
-    const msg = `السلام عليكم، اريد التقديم على وظيفة: ${
-      job?.title ?? ""
-    } (رقم: ${id})`;
+    const msg = `السلام عليكم، اريد التقديم على وظيفة: ${job?.title ?? ""} (رقم: ${id})`;
     const encoded = encodeURIComponent(msg);
 
     const webUrl = `https://wa.me/${phone}?text=${encoded}`;
@@ -60,13 +71,38 @@ export default function JobDetailsScreen() {
     }
   };
 
+  if (!id) {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+        <Stack.Screen options={{ title: "تفاصيل الوظيفة", headerTitleAlign: "center" }} />
+        <View style={styles.center}>
+          <Text style={[styles.title, { color: colors.text }]}>معرّف غير صحيح</Text>
+          <Text style={[styles.muted, { color: colors.muted }]}>
+            الرابط ناقص أو رقم الوظيفة غير موجود.
+          </Text>
+
+          <Pressable
+            onPress={() => refetch()}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              { backgroundColor: colors.primary },
+              pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+            ]}
+          >
+            <Text style={styles.primaryBtnText}>تحديث</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   if (isLoading) {
     return (
-      <View style={styles.screen}>
-        <Stack.Screen options={{ title: "تفاصيل الوظيفة" }} />
+      <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+        <Stack.Screen options={{ title: "تفاصيل الوظيفة", headerTitleAlign: "center" }} />
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={THEME.primary} />
-          <Text style={styles.muted}>جاري التحميل…</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.muted, { color: colors.muted }]}>جاري التحميل…</Text>
         </View>
       </View>
     );
@@ -74,55 +110,70 @@ export default function JobDetailsScreen() {
 
   if (error || !job) {
     return (
-      <View style={styles.screen}>
-        <Stack.Screen options={{ title: "تفاصيل الوظيفة" }} />
+      <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+        <Stack.Screen options={{ title: "تفاصيل الوظيفة", headerTitleAlign: "center" }} />
         <View style={styles.center}>
-          <Text style={styles.title}>مش لاقيين الوظيفة</Text>
-          <Text style={styles.muted}>ممكن تكون اتحذفت أو مش متاحة حالياً.</Text>
+          <Text style={[styles.title, { color: colors.text }]}>مش لاقيين الوظيفة</Text>
+          <Text style={[styles.muted, { color: colors.muted }]}>
+            ممكن تكون اتحذفت أو مش متاحة حالياً.
+          </Text>
 
           <Pressable
             onPress={() => refetch()}
+            disabled={isFetching}
             style={({ pressed }) => [
               styles.primaryBtn,
-              pressed && { opacity: 0.9 },
+              { backgroundColor: colors.primary, opacity: isFetching ? 0.7 : 1 },
+              pressed && !isFetching && { opacity: 0.9, transform: [{ scale: 0.99 }] },
             ]}
           >
-            <Text style={styles.primaryBtnText}>تحديث</Text>
+            <Text style={styles.primaryBtnText}>
+              {isFetching ? "جاري التحديث…" : "تحديث"}
+            </Text>
           </Pressable>
-
-          {/* ✅ removed رجوع button */}
         </View>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <Stack.Screen
-        options={{ title: "تفاصيل الوظيفة", headerTitleAlign: "center" }}
-      />
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.bg }]}>
+      <Stack.Screen options={{ title: "تفاصيل الوظيفة", headerTitleAlign: "center" }} />
 
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.card}>
-          <Text style={styles.jobTitle}>{job.title}</Text>
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              shadowOpacity: isDark ? 0.28 : 0.06,
+            },
+          ]}
+        >
+          <Text style={[styles.jobTitle, { color: colors.text }]}>{job.title}</Text>
 
-          {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+          {meta ? (
+            <Text style={[styles.meta, { color: colors.muted }]} numberOfLines={2}>
+              {meta}
+            </Text>
+          ) : null}
 
           <View style={styles.badgesRow}>
             {job.salary ? (
-              <View style={styles.badge}>
-                <FontAwesome name="money" size={14} color={THEME.primary} />
-                <Text style={styles.badgeText}>{job.salary}</Text>
+              <View style={[styles.badge, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>
+                <FontAwesome name="money" size={14} color={colors.primary} />
+                <Text style={[styles.badgeText, { color: colors.text }]}>{job.salary}</Text>
               </View>
             ) : null}
 
             {job.created_at ? (
-              <View style={styles.badge}>
-                <FontAwesome name="calendar" size={14} color={THEME.primary} />
-                <Text style={styles.badgeText}>
+              <View style={[styles.badge, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>
+                <FontAwesome name="calendar" size={14} color={colors.primary} />
+                <Text style={[styles.badgeText, { color: colors.text }]}>
                   {formatDate(job.created_at)}
                 </Text>
               </View>
@@ -131,11 +182,13 @@ export default function JobDetailsScreen() {
 
           {job.description ? (
             <>
-              <Text style={styles.sectionTitle}>الوصف</Text>
-              <Text style={styles.desc}>{job.description}</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>الوصف</Text>
+              <Text style={[styles.desc, { color: colors.text }]}>{job.description}</Text>
             </>
           ) : (
-            <Text style={styles.muted}>لا يوجد وصف.</Text>
+            <Text style={[styles.muted, { color: colors.muted, textAlign: "right" }]}>
+              لا يوجد وصف.
+            </Text>
           )}
         </View>
 
@@ -143,28 +196,25 @@ export default function JobDetailsScreen() {
           onPress={openWhatsApp}
           style={({ pressed }) => [
             styles.whatsappBtn,
-            pressed && { opacity: 0.92 },
+            pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
           ]}
         >
           <FontAwesome name="whatsapp" size={20} color="#fff" />
           <Text style={styles.whatsappText}>تواصل واتساب للتقديم</Text>
         </Pressable>
-
-        {/* ✅ removed رجوع button at bottom */}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: THEME.white[100],
-  },
+  screen: { flex: 1 },
+
   content: {
     padding: 12,
     paddingBottom: 18,
   },
+
   center: {
     flex: 1,
     alignItems: "center",
@@ -172,47 +222,51 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 16,
   },
+
   title: {
     fontFamily: FONT.bold,
     fontSize: 18,
-    color: THEME.dark[100],
     textAlign: "center",
   },
+
   muted: {
     fontFamily: FONT.regular,
     fontSize: 13,
-    color: THEME.gray[100],
     textAlign: "center",
     lineHeight: 18,
   },
 
   card: {
-    backgroundColor: THEME.white.DEFAULT,
     borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.08)",
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 14,
+    shadowColor: "#000",
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 2,
   },
+
   jobTitle: {
     fontFamily: FONT.bold,
     fontSize: 18,
-    color: THEME.dark[100],
     textAlign: "right",
     marginBottom: 6,
   },
+
   meta: {
     fontFamily: FONT.regular,
     fontSize: 13,
-    color: THEME.gray[100],
     textAlign: "right",
     marginBottom: 10,
   },
+
   badgesRow: {
     flexDirection: "row-reverse",
     flexWrap: "wrap",
     gap: 8,
     marginBottom: 12,
   },
+
   badge: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -220,24 +274,24 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: "#F2F7FF",
+    borderWidth: 1,
   },
+
   badgeText: {
     fontFamily: FONT.medium,
     fontSize: 12,
-    color: THEME.dark[100],
   },
+
   sectionTitle: {
     fontFamily: FONT.bold,
     fontSize: 14,
-    color: THEME.dark[100],
     textAlign: "right",
     marginBottom: 6,
   },
+
   desc: {
     fontFamily: FONT.regular,
     fontSize: 13,
-    color: THEME.dark[100],
     textAlign: "right",
     lineHeight: 20,
   },
@@ -253,6 +307,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
   },
+
   whatsappText: {
     fontFamily: FONT.bold,
     fontSize: 14,
@@ -262,12 +317,12 @@ const styles = StyleSheet.create({
   primaryBtn: {
     marginTop: 6,
     alignSelf: "stretch",
-    backgroundColor: THEME.primary,
     paddingVertical: 12,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
+
   primaryBtnText: {
     color: "#fff",
     fontFamily: FONT.bold,
