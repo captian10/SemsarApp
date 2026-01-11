@@ -1,5 +1,5 @@
-import { FONT } from "@/constants/Typography";
 import HomeSectionRail from "@/components/HomeSectionRail";
+import { FONT } from "@/constants/Typography";
 
 import {
   PROPERTY_TYPES,
@@ -30,10 +30,18 @@ type PropertyType = (typeof PROPERTY_TYPES)[number];
 type FilterType = "الكل" | PropertyType;
 type Sort = "latest" | "price_asc" | "price_desc";
 
+// ✅ Arabic-friendly normalize (fix: أرض/ارض + removes tashkeel, tatweel, extra spaces)
 const normalize = (v: unknown) =>
   String(v ?? "")
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    // remove Arabic diacritics / tashkeel
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, "")
+    // normalize alef variants
+    .replace(/[أإآ]/g, "ا")
+    // remove tatweel
+    .replace(/ـ/g, "");
 
 function useDebouncedValue<T>(value: T, delay = 250) {
   const [debounced, setDebounced] = useState(value);
@@ -55,7 +63,9 @@ function applyFilters(args: {
   const typeFiltered =
     type === "الكل"
       ? list
-      : list.filter((p: any) => normalize(p?.property_type) === normalize(type));
+      : list.filter(
+          (p: any) => normalize(p?.property_type) === normalize(type)
+        );
 
   const q = normalize(query);
   const searched =
@@ -121,7 +131,6 @@ export default function HomeScreen() {
   const theme = useAppTheme();
   const isDark = theme.scheme === "dark";
 
-  // ✅ map AppTheme colors -> UIColors shape
   const ui = useMemo<UIColors>(
     () => ({
       background: theme.colors.bg,
@@ -135,7 +144,6 @@ export default function HomeScreen() {
     [theme]
   );
 
-  // ✅ styles + tokens (no styles._ink45.color hacks)
   const { styles, tokens } = useMemo(
     () => createStyles(ui, isDark),
     [ui, isDark]
@@ -203,9 +211,15 @@ export default function HomeScreen() {
   );
 
   const list = useMemo(
-    () => ((data ?? []).filter(Boolean) as PropertyRow[]),
+    () => (data ?? []).filter(Boolean) as PropertyRow[],
     [data]
   );
+
+  // ✅ (Optional) debug: see actual types in DB
+  // useEffect(() => {
+  //   const set = new Set(list.map((p: any) => p?.property_type).filter(Boolean));
+  //   console.log("DB property_type values:", Array.from(set));
+  // }, [list]);
 
   const filtered = useMemo(() => {
     return applyFilters({
@@ -242,12 +256,16 @@ export default function HomeScreen() {
     refetch();
   }, [refetch]);
 
+  // ✅ IMPORTANT FIX: build rails for ALL property types (not only first 3)
   const rails = useMemo(() => {
     const latest = pickLatest(list, 12);
 
-    const t1 = PROPERTY_TYPES[0];
-    const t2 = PROPERTY_TYPES[1];
-    const t3 = PROPERTY_TYPES[2];
+    const typeRails = PROPERTY_TYPES.map((t) => ({
+      key: `type-${t}`,
+      title: t,
+      items: pickType(list, t, 12),
+      params: { title: t, type: t, sort: "latest" as Sort },
+    })).filter((s) => s.items && s.items.length > 0);
 
     return [
       {
@@ -256,37 +274,8 @@ export default function HomeScreen() {
         items: latest,
         params: { title: "أحدث الإعلانات", sort: "latest" as Sort },
       },
-      ...(t1
-        ? [
-            {
-              key: `type-${t1}`,
-              title: t1,
-              items: pickType(list, t1, 12),
-              params: { title: t1, type: t1, sort: "latest" as Sort },
-            },
-          ]
-        : []),
-      ...(t2
-        ? [
-            {
-              key: `type-${t2}`,
-              title: t2,
-              items: pickType(list, t2, 12),
-              params: { title: t2, type: t2, sort: "latest" as Sort },
-            },
-          ]
-        : []),
-      ...(t3
-        ? [
-            {
-              key: `type-${t3}`,
-              title: t3,
-              items: pickType(list, t3, 12),
-              params: { title: t3, type: t3, sort: "latest" as Sort },
-            },
-          ]
-        : []),
-    ].filter((s) => s.items && s.items.length);
+      ...typeRails,
+    ].filter((s) => s.items && s.items.length > 0);
   }, [list]);
 
   function TypeChip({
