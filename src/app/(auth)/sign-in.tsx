@@ -1,7 +1,7 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { supabase } from "@lib/supabase";
 import { Link, Stack } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
   Image,
@@ -37,16 +37,25 @@ const SignInScreen = () => {
   // ✅ show "resend confirmation" CTA when needed
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
 
+  // ✅ prevent double-alert per action
+  const alertedRef = useRef(false);
+  const safeAlert = (title: string, msg: string) => {
+    if (alertedRef.current) return;
+    alertedRef.current = true;
+    Alert.alert(title, msg);
+  };
+
   const canSubmit = useMemo(
     () => email.trim().length > 0 && password.trim().length > 0 && !loading,
     [email, password, loading]
   );
 
   async function resendEmailConfirmation() {
-    const e = email.trim();
+    alertedRef.current = false;
 
+    const e = email.trim();
     if (!isValidEmail(e)) {
-      Alert.alert("تنبيه", "اكتب بريد إلكتروني صحيح ثم جرّب مرة أخرى.");
+      safeAlert("تنبيه", "اكتب بريد إلكتروني صحيح ثم جرّب مرة أخرى.");
       return;
     }
 
@@ -58,34 +67,36 @@ const SignInScreen = () => {
       });
 
       if (error) {
-        Alert.alert("خطأ", error.message);
+        safeAlert("خطأ", error.message);
         return;
       }
 
-      Alert.alert(
+      safeAlert(
         "تم الإرسال",
         "تم إرسال رسالة التفعيل مرة أخرى ✅\nافتح بريدك (Inbox/Spam) واضغط على رابط التفعيل."
       );
     } catch (err: any) {
-      Alert.alert("خطأ", err?.message ?? "حدث خطأ غير متوقع");
+      safeAlert("خطأ", err?.message ?? "حدث خطأ غير متوقع");
     } finally {
       setLoading(false);
     }
   }
 
   async function signInWithEmail() {
+    alertedRef.current = false;
+
     const e = email.trim();
     const p = password.trim();
 
     setNeedsEmailConfirm(false);
 
     if (!e || !p) {
-      Alert.alert("تنبيه", "من فضلك اكتب البريد الإلكتروني وكلمة المرور.");
+      safeAlert("تنبيه", "من فضلك اكتب البريد الإلكتروني وكلمة المرور.");
       return;
     }
 
     if (!isValidEmail(e)) {
-      Alert.alert("تنبيه", "البريد الإلكتروني غير صحيح.");
+      safeAlert("تنبيه", "البريد الإلكتروني غير صحيح.");
       return;
     }
 
@@ -99,27 +110,26 @@ const SignInScreen = () => {
       if (error) {
         const msg = String(error.message ?? "");
 
-        // ✅ Common Supabase message when email confirmation is required
         const looksLikeNotConfirmed =
           msg.toLowerCase().includes("email not confirmed") ||
           msg.toLowerCase().includes("not confirmed");
 
         if (looksLikeNotConfirmed) {
           setNeedsEmailConfirm(true);
-          Alert.alert(
+          safeAlert(
             "الحساب غير مُفعّل",
             "لازم تفعّل البريد الإلكتروني الأول.\nابحث عن رسالة التفعيل في Inbox أو Spam."
           );
           return;
         }
 
-        Alert.alert("خطأ", msg);
+        safeAlert("خطأ", msg);
         return;
       }
 
       // ✅ success -> AuthProvider will route based on role
     } catch (err: any) {
-      Alert.alert("خطأ", err?.message ?? "حدث خطأ غير متوقع");
+      safeAlert("خطأ", err?.message ?? "حدث خطأ غير متوقع");
     } finally {
       setLoading(false);
     }
@@ -137,7 +147,6 @@ const SignInScreen = () => {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Image on top */}
         <View style={styles.imageWrap}>
           <Image
             source={require("../../../assets/images/S.png")}
@@ -148,9 +157,7 @@ const SignInScreen = () => {
 
         <View style={styles.header}>
           <Text style={styles.title}>تطبيق سمسار للحجز والإستعلام</Text>
-          <Text style={styles.subtitle}>
-            ادخل البريد الإلكتروني وكلمة المرور
-          </Text>
+          <Text style={styles.subtitle}>ادخل البريد الإلكتروني وكلمة المرور</Text>
         </View>
 
         <View style={styles.card}>
@@ -171,11 +178,7 @@ const SignInScreen = () => {
                 }}
                 placeholder="example@gmail.com"
                 placeholderTextColor={THEME.gray[100]}
-                style={[
-                  styles.input,
-                  styles.inputEmail,
-                  styles.inputWithLeading,
-                ]}
+                style={[styles.input, styles.inputEmail, styles.inputWithLeading]}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -186,7 +189,6 @@ const SignInScreen = () => {
 
           <View style={styles.field}>
             <Text style={styles.label}>كلمة المرور</Text>
-
             <View style={styles.inputWrapperSurface}>
               <TextInput
                 value={password}
@@ -224,7 +226,6 @@ const SignInScreen = () => {
             text={loading ? "جاري تسجيل الدخول..." : "دخول"}
           />
 
-          {/* ✅ Resend confirmation */}
           {needsEmailConfirm && (
             <Pressable
               onPress={resendEmailConfirmation}
@@ -248,10 +249,7 @@ const SignInScreen = () => {
           <Link href="/sign-up" asChild>
             <Pressable
               disabled={loading}
-              style={({ pressed }) => [
-                styles.linkBtn,
-                pressed && styles.pressed,
-              ]}
+              style={({ pressed }) => [styles.linkBtn, pressed && styles.pressed]}
             >
               <Text style={styles.linkText}>إنشاء حساب جديد</Text>
             </Pressable>
@@ -386,26 +384,13 @@ const styles = StyleSheet.create<Styles>({
     fontFamily: FONT.regular,
   },
 
-  inputRtl: {
-    textAlign: "right",
-  },
+  inputRtl: { textAlign: "right" },
+  inputEmail: { textAlign: "right" },
 
-  inputEmail: {
-    textAlign: "right",
-  },
+  inputWithLeading: { paddingLeft: 4 },
+  inputWithTrailing: { paddingLeft: 40 },
 
-  inputWithLeading: {
-    paddingLeft: 4,
-  },
-
-  inputWithTrailing: {
-    paddingLeft: 40,
-  },
-
-  leadingIcon: {
-    marginLeft: 8,
-    marginRight: 6,
-  },
+  leadingIcon: { marginLeft: 8, marginRight: 6 },
 
   eyeBtn: {
     position: "absolute",
@@ -437,16 +422,8 @@ const styles = StyleSheet.create<Styles>({
     gap: 10,
     marginTop: 4,
   },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#EDEDED",
-  },
-  dividerText: {
-    fontSize: 12,
-    color: THEME.gray[100],
-    fontFamily: FONT.medium,
-  },
+  divider: { flex: 1, height: 1, backgroundColor: "#EDEDED" },
+  dividerText: { fontSize: 12, color: THEME.gray[100], fontFamily: FONT.medium },
 
   linkBtn: {
     borderRadius: 14,

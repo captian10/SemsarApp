@@ -6,14 +6,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FONT } from "@/constants/Typography";
 import { useClientOnlyValue } from "@components/useClientOnlyValue";
-import { useAuth } from "@providers/AuthProvider";
 import { useAppTheme } from "@providers/AppThemeProvider";
+import { useAuth } from "@providers/AuthProvider";
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>["name"];
   color: string;
 }) {
-  return <FontAwesome size={22} style={{ marginBottom: 2 }} {...props} />;
+  return <FontAwesome size={22} style={{ marginBottom: -1 }} {...props} />;
 }
 
 export default function TabLayout() {
@@ -39,8 +39,14 @@ export default function TabLayout() {
 
   if (loading || !session) return null;
 
-  const bottomPad = Math.max(insets.bottom, Platform.OS === "android" ? 10 : 0);
-  const tabHeight = 66 + bottomPad;
+  const bottomPad = Math.max(
+    insets.bottom,
+    Platform.OS === "android" ? 14 : 10
+  );
+  const BASE_HEIGHT = 70;
+  const tabHeight = BASE_HEIGHT + bottomPad;
+
+  const fabLift = Platform.OS === "android" ? 8 : 6;
 
   return (
     <Tabs
@@ -50,15 +56,17 @@ export default function TabLayout() {
         tabBarActiveTintColor: c.primary,
         tabBarInactiveTintColor: c.muted,
 
-        tabBarItemStyle: { flex: 1, paddingVertical: 6 },
+        tabBarItemStyle: { flex: 1, paddingTop: 1, paddingBottom: 10 },
 
         tabBarStyle: {
           backgroundColor: c.tabBarBg,
           borderTopColor: c.tabBarBorder,
           borderTopWidth: 1,
+
           height: tabHeight,
           paddingBottom: bottomPad,
-          paddingTop: 8,
+          paddingTop: 4,
+          paddingHorizontal: 6,
 
           shadowColor: "#000",
           shadowOpacity: t.scheme === "dark" ? 0.25 : 0.06,
@@ -69,8 +77,9 @@ export default function TabLayout() {
 
         tabBarLabelStyle: {
           fontFamily: FONT.medium,
-          fontSize: 12,
-          marginTop: 2,
+          fontSize: 11,
+          marginTop: 0,
+          marginBottom: 1,
         },
       }}
     >
@@ -100,7 +109,12 @@ export default function TabLayout() {
           title: "",
           headerShown: false,
           tabBarLabel: () => null,
-          tabBarButton: ({ accessibilityLabel, accessibilityState, testID }) => (
+
+          tabBarButton: ({
+            accessibilityLabel,
+            accessibilityState,
+            testID,
+          }) => (
             <Pressable
               onPress={() => router.push("/(user)/add")}
               accessibilityLabel={accessibilityLabel}
@@ -109,6 +123,8 @@ export default function TabLayout() {
               hitSlop={12}
               style={({ pressed }) => ({
                 alignSelf: "center",
+                marginTop: -(fabLift - 4),
+
                 width: 56,
                 height: 56,
                 borderRadius: 28,

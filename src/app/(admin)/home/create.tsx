@@ -19,19 +19,13 @@ import { randomUUID } from "expo-crypto";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import React, {
-  memo,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
+import React, { memo, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   Alert,
   Image,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -98,10 +92,14 @@ function getContentType(fileExt: string) {
 }
 
 function getImagesMediaTypes(): any {
+  // ✅ New API: ImagePicker.MediaType (array)
   const MT = (ImagePicker as any).MediaType;
   if (MT?.Images) return [MT.Images];
+
+  // fallback very old
   return ["images"];
 }
+
 
 function isRlsError(err: any) {
   const msg = String(err?.message ?? "").toLowerCase();
@@ -109,6 +107,32 @@ function isRlsError(err: any) {
 }
 
 const digitsOnly = (s: string) => String(s ?? "").replace(/\D/g, "");
+
+// ✅ FIX: iOS can return "limited" and Android Photo Picker may not return "granted".
+// So we treat (granted || limited) as ok, and on Android we allow opening the picker anyway.
+async function ensurePhotoPermission(): Promise<boolean> {
+  if (Platform.OS === "android") return true;
+
+  const perm = await ImagePicker.getMediaLibraryPermissionsAsync();
+
+  // iOS: limited = allowed
+  if ((perm as any)?.granted || (perm as any)?.status === "limited") return true;
+
+  if (!(perm as any)?.canAskAgain) {
+    Alert.alert(
+      "مطلوب إذن",
+      "الإذن مرفوض من إعدادات الجهاز. افتح الإعدادات واسمح بالصور.",
+      [
+        { text: "إلغاء", style: "cancel" },
+        { text: "فتح الإعدادات", onPress: () => Linking.openSettings() },
+      ]
+    );
+    return false;
+  }
+
+  const req = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  return (req as any)?.granted || (req as any)?.status === "limited";
+}
 
 type FormData = {
   coverImage: string | null;
@@ -393,9 +417,7 @@ const StatusSelector = memo(function StatusSelector({
               disabled={loading}
               accessibilityLabel={`حالة العقار: ${label}`}
             >
-              <Text
-                style={[ui.statusText, active ? ui.statusTextActive : null]}
-              >
+              <Text style={[ui.statusText, active ? ui.statusTextActive : null]}>
                 {label}
               </Text>
             </Pressable>
@@ -502,8 +524,7 @@ export default function CreatePropertyScreen() {
     dispatchForm({
       type: "UPDATE_FIELD",
       field: "price",
-      value:
-        updatingProperty.price != null ? String(updatingProperty.price) : "",
+      value: updatingProperty.price != null ? String(updatingProperty.price) : "",
     });
     dispatchForm({
       type: "UPDATE_FIELD",
@@ -522,24 +543,16 @@ export default function CreatePropertyScreen() {
     });
 
     const bedrooms =
-      updatingProperty.bedrooms != null
-        ? String(updatingProperty.bedrooms)
-        : "";
+      updatingProperty.bedrooms != null ? String(updatingProperty.bedrooms) : "";
     const bathrooms =
       updatingProperty.bathrooms != null
         ? String(updatingProperty.bathrooms)
         : "";
     const area =
-      updatingProperty.area_sqm != null
-        ? String(updatingProperty.area_sqm)
-        : "";
+      updatingProperty.area_sqm != null ? String(updatingProperty.area_sqm) : "";
 
     dispatchForm({ type: "UPDATE_FIELD", field: "bedrooms", value: bedrooms });
-    dispatchForm({
-      type: "UPDATE_FIELD",
-      field: "bathrooms",
-      value: bathrooms,
-    });
+    dispatchForm({ type: "UPDATE_FIELD", field: "bathrooms", value: bathrooms });
     dispatchForm({ type: "UPDATE_FIELD", field: "area", value: area });
 
     if (
@@ -641,8 +654,7 @@ export default function CreatePropertyScreen() {
 
     const title = formData.title.trim();
     if (!title) newErrors.push("عنوان العقار مطلوب");
-    if (title.length > 100)
-      newErrors.push("العنوان طويل جدًا (حد أقصى 100 حرف)");
+    if (title.length > 100) newErrors.push("العنوان طويل جدًا (حد أقصى 100 حرف)");
 
     const p = toFloatOrNull(formData.price);
     if (!formData.price.trim()) newErrors.push("السعر مطلوب");
@@ -683,12 +695,8 @@ export default function CreatePropertyScreen() {
   const pickCoverImage = async () => {
     if (loading) return;
 
-    const { status: perm } =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (perm !== "granted") {
-      Alert.alert("مطلوب إذن", "من فضلك اسمح بالوصول للصور.");
-      return;
-    }
+    const ok = await ensurePhotoPermission();
+    if (!ok) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: getImagesMediaTypes(),
@@ -702,9 +710,7 @@ export default function CreatePropertyScreen() {
     if (!selected?.uri) return;
 
     try {
-      const info = await FileSystem.getInfoAsync(selected.uri, {
-        size: true,
-      } as any);
+      const info = await FileSystem.getInfoAsync(selected.uri, { size: true } as any);
       const size = (info as any)?.size as number | undefined;
       if (typeof size === "number" && size > MAX_IMAGE_BYTES) {
         Alert.alert("خطأ", "الصورة كبيرة جدًا. اختر صورة أقل من 7MB.");
@@ -722,12 +728,8 @@ export default function CreatePropertyScreen() {
   const pickExtraImages = async () => {
     if (loading) return;
 
-    const { status: perm } =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (perm !== "granted") {
-      Alert.alert("مطلوب إذن", "من فضلك اسمح بالوصول للصور.");
-      return;
-    }
+    const ok = await ensurePhotoPermission();
+    if (!ok) return;
 
     const result: any = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: getImagesMediaTypes(),
@@ -739,10 +741,12 @@ export default function CreatePropertyScreen() {
 
     if (result.canceled) return;
 
+    // ✅ Don’t require file:// (Android photo picker may return content://)
     const assets = (result.assets ?? []) as Array<{ uri?: string }>;
     const uris = assets
       .map((a) => String(a?.uri ?? "").trim())
-      .filter((u) => u.startsWith("file://"));
+      .filter((u) => u.length > 0);
+
     if (!uris.length) return;
 
     const okUris: string[] = [];
@@ -811,7 +815,8 @@ export default function CreatePropertyScreen() {
       const s = String(v ?? "").trim();
       if (!s) continue;
 
-      if (isLocalUri(s)) {
+      if (isLocalUri(s) || s.startsWith("content://")) {
+        // ✅ upload both file:// and content://
         const p = await uploadImage(s);
         if (p) paths.push(p);
       } else {
@@ -870,7 +875,7 @@ export default function CreatePropertyScreen() {
   };
 
   const syncPropertyImages = async (propertyId: string) => {
-    const hasNewLocal = extraImages.some((x) => isLocalUri(x));
+    const hasNewLocal = extraImages.some((x) => isLocalUri(x) || x.startsWith("content://"));
 
     if (isUpdating && !didLoadImages && !hasNewLocal) return;
     if (isUpdating && imagesLoadError && !hasNewLocal) return;
@@ -891,9 +896,7 @@ export default function CreatePropertyScreen() {
       sort_order: idx,
     }));
 
-    const { error: insErr } = await supabase
-      .from("property_images")
-      .insert(rows);
+    const { error: insErr } = await supabase.from("property_images").insert(rows);
     if (insErr) throw new Error(insErr.message);
   };
 
@@ -905,7 +908,7 @@ export default function CreatePropertyScreen() {
       setLoading(true);
 
       let coverPath: string | null = null;
-      if (isLocalUri(formData.coverImage) && formData.coverImage) {
+      if ((isLocalUri(formData.coverImage) || String(formData.coverImage ?? "").startsWith("content://")) && formData.coverImage) {
         coverPath = await uploadImage(formData.coverImage);
       }
 
@@ -918,16 +921,15 @@ export default function CreatePropertyScreen() {
             await syncOwnerContact(pid);
             await syncPropertyImages(pid);
 
-            // ✅ NEW: broadcast push to all users (best-effort, don’t block save)
-void broadcastNewListing({
-  kind: "property",
-  id: pid,
-  title: payload.title,
-  city: payload.city ?? null,
-}).catch((e: any) =>
-  console.log("[push] broadcast property failed:", e?.message ?? String(e))
-);
-
+            // ✅ best-effort push broadcast
+            broadcastNewListing({
+              kind: "property",
+              id: pid,
+              title: payload.title,
+              city: payload.city ?? null,
+            }).catch((e: any) =>
+              console.log("[push] broadcast property failed:", e?.message ?? String(e))
+            );
 
             resetFields();
             setLoading(false);
@@ -957,7 +959,11 @@ void broadcastNewListing({
 
       let finalCover: string | null = formData.coverImage;
 
-      if (isLocalUri(formData.coverImage) && formData.coverImage) {
+      if (
+        (isLocalUri(formData.coverImage) ||
+          String(formData.coverImage ?? "").startsWith("content://")) &&
+        formData.coverImage
+      ) {
         finalCover = await uploadImage(formData.coverImage);
       }
 
@@ -1063,16 +1069,10 @@ void broadcastNewListing({
               ]}
               accessibilityLabel="اختيار صورة الغلاف"
             >
-              <Image
-                source={imageSourceForPreview}
-                style={ui.image}
-                resizeMode="cover"
-              />
+              <Image source={imageSourceForPreview} style={ui.image} resizeMode="cover" />
               <View style={ui.imageOverlay}>
                 <Text style={ui.imageOverlayText}>
-                  {formData.coverImage
-                    ? "تغيير صورة الغلاف"
-                    : "اختيار صورة غلاف"}
+                  {formData.coverImage ? "تغيير صورة الغلاف" : "اختيار صورة غلاف"}
                 </Text>
               </View>
             </Pressable>
@@ -1118,11 +1118,7 @@ void broadcastNewListing({
                   >
                     {extraThumbs.map((it) => (
                       <View key={it.key} style={ui.thumbWrap}>
-                        <Image
-                          source={{ uri: it.uri }}
-                          style={ui.thumb}
-                          resizeMode="cover"
-                        />
+                        <Image source={{ uri: it.uri }} style={ui.thumb} resizeMode="cover" />
                         <Pressable
                           onPress={() => removeExtraImage(it.raw)}
                           style={ui.thumbRemove}
@@ -1162,11 +1158,7 @@ void broadcastNewListing({
               label="وصف (اختياري)"
               value={formData.description}
               onChangeText={(v) =>
-                dispatchForm({
-                  type: "UPDATE_FIELD",
-                  field: "description",
-                  value: v,
-                })
+                dispatchForm({ type: "UPDATE_FIELD", field: "description", value: v })
               }
               placeholder="اكتب وصف مختصر (المميزات – الدور – التشطيب...)"
               loading={loading}
@@ -1178,11 +1170,7 @@ void broadcastNewListing({
               ui={ui}
               propertyType={formData.propertyType}
               setPropertyType={(v) =>
-                dispatchForm({
-                  type: "UPDATE_FIELD",
-                  field: "propertyType",
-                  value: v,
-                })
+                dispatchForm({ type: "UPDATE_FIELD", field: "propertyType", value: v })
               }
               loading={loading}
             />
@@ -1191,11 +1179,7 @@ void broadcastNewListing({
               ui={ui}
               status={formData.status}
               setStatus={(v) =>
-                dispatchForm({
-                  type: "UPDATE_FIELD",
-                  field: "status",
-                  value: v,
-                })
+                dispatchForm({ type: "UPDATE_FIELD", field: "status", value: v })
               }
               loading={loading}
             />
@@ -1229,11 +1213,7 @@ void broadcastNewListing({
               label="العنوان (اختياري)"
               value={formData.address}
               onChangeText={(v) =>
-                dispatchForm({
-                  type: "UPDATE_FIELD",
-                  field: "address",
-                  value: v,
-                })
+                dispatchForm({ type: "UPDATE_FIELD", field: "address", value: v })
               }
               placeholder="مثال: شارع النيل، أمام المستشفى"
               loading={loading}
@@ -1265,11 +1245,7 @@ void broadcastNewListing({
                   label="اسم صاحب العقار (اختياري)"
                   value={formData.ownerName}
                   onChangeText={(v) =>
-                    dispatchForm({
-                      type: "UPDATE_FIELD",
-                      field: "ownerName",
-                      value: v,
-                    })
+                    dispatchForm({ type: "UPDATE_FIELD", field: "ownerName", value: v })
                   }
                   placeholder="مثال: أحمد محمد"
                   loading={loading}
@@ -1281,11 +1257,7 @@ void broadcastNewListing({
                   label="رقم الموبايل (اختياري)"
                   value={formData.ownerPhone}
                   onChangeText={(v) =>
-                    dispatchForm({
-                      type: "UPDATE_FIELD",
-                      field: "ownerPhone",
-                      value: v,
-                    })
+                    dispatchForm({ type: "UPDATE_FIELD", field: "ownerPhone", value: v })
                   }
                   placeholder="مثال: 01012345678"
                   loading={loading}
@@ -1321,11 +1293,7 @@ void broadcastNewListing({
                     label="غرف"
                     value={formData.bedrooms}
                     onChangeText={(v) =>
-                      dispatchForm({
-                        type: "UPDATE_FIELD",
-                        field: "bedrooms",
-                        value: v,
-                      })
+                      dispatchForm({ type: "UPDATE_FIELD", field: "bedrooms", value: v })
                     }
                     placeholder="مثال: 3"
                     loading={loading}
@@ -1340,11 +1308,7 @@ void broadcastNewListing({
                     label="حمامات"
                     value={formData.bathrooms}
                     onChangeText={(v) =>
-                      dispatchForm({
-                        type: "UPDATE_FIELD",
-                        field: "bathrooms",
-                        value: v,
-                      })
+                      dispatchForm({ type: "UPDATE_FIELD", field: "bathrooms", value: v })
                     }
                     placeholder="مثال: 2"
                     loading={loading}
@@ -1359,11 +1323,7 @@ void broadcastNewListing({
                     label="مساحة (م²)"
                     value={formData.area}
                     onChangeText={(v) =>
-                      dispatchForm({
-                        type: "UPDATE_FIELD",
-                        field: "area",
-                        value: v,
-                      })
+                      dispatchForm({ type: "UPDATE_FIELD", field: "area", value: v })
                     }
                     placeholder="مثال: 140"
                     loading={loading}
@@ -1385,13 +1345,7 @@ void broadcastNewListing({
 
             <Button
               onPress={onSubmit}
-              text={
-                loading
-                  ? "جاري الحفظ..."
-                  : isUpdating
-                  ? "تحديث العقار"
-                  : "إضافة العقار"
-              }
+              text={loading ? "جاري الحفظ..." : isUpdating ? "تحديث العقار" : "إضافة العقار"}
               disabled={loading}
             />
 
@@ -1426,9 +1380,6 @@ function createStyles(t: any) {
     : "rgba(15,23,42,0.10)";
 
   const inputBg = isDark ? "rgba(255,255,255,0.03)" : "rgba(15,23,42,0.02)";
-
-  const primarySoftBg = "rgba(59,130,246,0.10)";
-  const primarySoftBorder = "rgba(59,130,246,0.18)";
 
   return StyleSheet.create<Styles>({
     screen: { flex: 1, backgroundColor: t.colors.bg },

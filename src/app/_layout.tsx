@@ -3,7 +3,8 @@ import { ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { View } from "react-native";
 import "react-native-reanimated";
 
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -26,11 +27,12 @@ import {
 } from "@providers/AppThemeProvider";
 
 import SystemBars from "@/components/SystemBars";
+import AnimatedSplash from "../components/AnimatedSplash";
 
 export { ErrorBoundary } from "expo-router";
 export const unstable_settings = { initialRouteName: "/" };
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -40,31 +42,43 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
+  const [showAnimatedSplash, setShowAnimatedSplash] = useState(true);
+
   useEffect(() => {
     if (error) throw error;
   }, [error]);
-
-  useEffect(() => {
-    if (loaded) SplashScreen.hideAsync();
-  }, [loaded]);
 
   if (!loaded) return null;
 
   return (
     <SafeAreaProvider>
       <AppThemeProvider>
-        <RootLayoutNav />
+        <RootLayoutNav
+          showAnimatedSplash={showAnimatedSplash}
+          onSplashDone={() => setShowAnimatedSplash(false)}
+        />
       </AppThemeProvider>
     </SafeAreaProvider>
   );
 }
 
-function RootLayoutNav() {
+function RootLayoutNav({
+  showAnimatedSplash,
+  onSplashDone,
+}: {
+  showAnimatedSplash: boolean;
+  onSplashDone: () => void;
+}) {
   const navTheme = useNavigationTheme();
   const t = useAppTheme();
 
+  // Hide native splash only after first layout to avoid white flash
+  const onLayoutRootView = useCallback(async () => {
+    await SplashScreen.hideAsync().catch(() => {});
+  }, []);
+
   return (
-    <>
+    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
       <SystemBars />
 
       <StatusBar
@@ -91,6 +105,8 @@ function RootLayoutNav() {
           </QueryProvider>
         </AuthProvider>
       </ThemeProvider>
-    </>
+
+      {showAnimatedSplash && <AnimatedSplash onDone={onSplashDone} />}
+    </View>
   );
 }

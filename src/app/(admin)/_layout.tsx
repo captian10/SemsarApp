@@ -12,7 +12,7 @@ function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>["name"];
   color: string;
 }) {
-  return <FontAwesome size={20} style={{ marginBottom: -2 }} {...props} />;
+  return <FontAwesome size={20} style={{ marginBottom: -1 }} {...props} />;
 }
 
 export default function TabLayout() {
@@ -22,8 +22,20 @@ export default function TabLayout() {
 
   if (!isAdmin) return <Redirect href="/(user)" />;
 
-  const tabBarPaddingBottom =
-    Platform.OS === "android" ? Math.max(insets.bottom, 10) : insets.bottom;
+  // ✅ على أندرويد (edge-to-edge) insets.bottom ساعات بيطلع 0
+  // فنعمل حد أدنى عملي عشان اللابل مايتقصّش تحت
+  const SAFE_ANDROID_MIN = 26; // جرّب 24..30 حسب جهازك
+  const bottomInset =
+    Platform.OS === "android"
+      ? Math.max(insets.bottom, SAFE_ANDROID_MIN)
+      : Math.max(insets.bottom, 10);
+
+  // ✅ مساحة إضافية صغيرة جوة التاب بار
+  const extraInner = 6;
+
+  // ✅ ارتفاع مريح للآيكون + اللابل
+  const BASE_HEIGHT = 58;
+  const tabHeight = BASE_HEIGHT + bottomInset + extraInner;
 
   return (
     <Tabs
@@ -33,10 +45,17 @@ export default function TabLayout() {
         tabBarActiveTintColor: t.colors.primary,
         tabBarInactiveTintColor: t.colors.muted,
 
+        // ✅ خلي مساحة تحت للـ label بدل ما يتقص
+        tabBarItemStyle: {
+          paddingTop: 1,
+          paddingBottom: 10, // مهم جدًا للّابل
+        },
+
         tabBarLabelStyle: {
           fontFamily: FONT.medium,
           fontSize: 11,
-          paddingTop: 2,
+          marginTop: 0,
+          marginBottom: 1, // ما تنزّلوش لتحت
         },
 
         tabBarStyle: [
@@ -45,8 +64,12 @@ export default function TabLayout() {
           {
             backgroundColor: t.colors.tabBarBg,
             borderTopColor: t.colors.tabBarBorder,
-            paddingBottom: tabBarPaddingBottom,
-            height: 58 + tabBarPaddingBottom,
+            borderTopWidth: 1,
+
+            height: tabHeight,
+            paddingTop: 8,
+            paddingBottom: bottomInset + extraInner, // ✅ ده اللي بيمنع القص تحت
+            paddingHorizontal: 8,
           } as ViewStyle,
         ],
       }}
@@ -77,16 +100,13 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBarBase: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 8,
   },
-
   tabBarDark: {
     shadowOpacity: 0,
     shadowRadius: 0,
     shadowOffset: { width: 0, height: 0 },
     elevation: 0,
   },
-
   tabBarLight: {
     shadowColor: "#000",
     shadowOpacity: 0.06,

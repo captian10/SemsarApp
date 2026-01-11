@@ -10,13 +10,19 @@ import { supabase } from "@lib/supabase";
 import type { TablesInsert } from "database.types";
 
 /**
- * SemsarApp Notifications — clean + type-safe
+ * SemsarApp Notifications — robust + RLS-friendly
  *
- * - Foreground notification handler
- * - Android channels (default / requests / listings)
- * - Register + get Expo push token
- * - Save token to profile (update + fallback upsert)
- * - Call Edge Function "notify-new-listing" with forced Authorization header
+ * ✅ Foreground notification handler (banner/list)
+ * ✅ Android channels (default / requests / listings)
+ * ✅ Register + get Expo push token
+ * ✅ Save token to profile:
+ *    - waits for profile row to exist (retry)
+ *    - update only (NO upsert fallback, because your phone NOT NULL + unique)
+ * ✅ Call Edge Function "notify-new-listing" with forced Authorization header
+ *
+ * NOTE:
+ * - Since profiles.phone is NOT NULL + UNIQUE, doing an upsert fallback from client
+ *   is dangerous (will fail or create inconsistent data). We only update once row exists.
  */
 
 export type PushChannelId = "default" | "requests" | "listings";
@@ -86,7 +92,8 @@ async function getExpoToken(projectId: string): Promise<string> {
 
   for (let i = 1; i <= 3; i++) {
     try {
-      const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+      const token = (await Notifications.getExpoPushTokenAsync({ projectId }))
+        .data;
       if (!isExpoPushToken(token)) throw new Error("Invalid Expo push token.");
       return token;
     } catch (e) {
@@ -129,7 +136,10 @@ export async function registerAndSaveMyPushToken(): Promise<string | null> {
     await saveMyExpoPushToken(token);
     return token;
   } catch (e: any) {
-    console.log("[push] registerAndSaveMyPushToken failed:", e?.message ?? String(e));
+    console.log(
+      "[push] registerAndSaveMyPushToken failed:",
+      e?.message ?? String(e)
+    );
     return null;
   }
 }
@@ -144,6 +154,27 @@ async function getAccessTokenWithRetry(tries = 6): Promise<string | null> {
   return null;
 }
 
+async function waitForProfileRow(uid: string, tries = 10): Promise<boolean> {
+  for (let i = 0; i < tries; i++) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", uid)
+      .maybeSingle<{ id: string }>();
+
+    if (!error && data?.id) return true;
+
+    // If RLS blocks SELECT for some reason, update will also fail.
+    // We still retry briefly (trigger may not have inserted yet).
+    await sleep(350);
+  }
+  return false;
+}
+
+/**
+ * Save token for the currently authenticated user.
+ * ✅ update only (safe with your NOT NULL + UNIQUE phone)
+ */
 export async function saveMyExpoPushToken(token: string) {
   if (!isExpoPushToken(token)) return;
 
@@ -151,41 +182,27 @@ export async function saveMyExpoPushToken(token: string) {
   const uid = data.session?.user?.id;
   if (!uid) return;
 
-  // 1) Update first
-  const { data: updated, error: upErr } = await supabase
+  // Ensure profile exists first (trigger may be slightly late)
+  const exists = await waitForProfileRow(uid, 10);
+  if (!exists) {
+    console.log("[push] profile row not ready -> not saving token yet");
+    return;
+  }
+
+  const { data: updated, error } = await supabase
     .from("profiles")
     .update({ expo_push_token: token })
     .eq("id", uid)
-    .select("id")
-    .maybeSingle();
+    .select("id, expo_push_token")
+    .maybeSingle<{ id: string; expo_push_token: string | null }>();
 
-  if (upErr) {
-    console.log("[push] saveMyExpoPushToken update error:", upErr.message);
+  if (error) {
+    console.log("[push] saveMyExpoPushToken update error:", error.message);
     return;
   }
 
   if (updated?.id) {
-    console.log("[push] Token saved:", token);
-    return;
-  }
-
-  // 2) Fallback upsert (profile row not created yet)
-  // ✅ Your DB types say phone is string (NOT nullable) => use ""
-  const fallback: TablesInsert<"profiles"> = {
-    id: uid,
-    full_name: "مستخدم",
-    phone: "",
-    expo_push_token: token,
-  };
-
-  const { error: insErr } = await supabase
-    .from("profiles")
-    .upsert(fallback, { onConflict: "id" });
-
-  if (insErr) {
-    console.log("[push] saveMyExpoPushToken upsert fallback error:", insErr.message);
-  } else {
-    console.log("[push] Token saved (upsert fallback):", token);
+    console.log("[push] Token saved ✅");
   }
 }
 
@@ -198,7 +215,7 @@ export async function getMyExpoPushToken(): Promise<string | null> {
     .from("profiles")
     .select("expo_push_token")
     .eq("id", uid)
-    .single<{ expo_push_token: string | null }>();
+    .maybeSingle<{ expo_push_token: string | null }>();
 
   if (error) {
     console.log("[push] getMyExpoPushToken error:", error.message);
@@ -254,3 +271,12 @@ export async function broadcastNewListing(args: BroadcastNewListingArgs) {
 
   return res.data as any;
 }
+
+/**
+ * (Optional) If you ever need to create profile from backend safely,
+ * do it with service_role in an Edge Function, NOT from the client.
+ */
+export type CreateProfileArgs = Pick<
+  TablesInsert<"profiles">,
+  "id" | "full_name" | "phone"
+>;

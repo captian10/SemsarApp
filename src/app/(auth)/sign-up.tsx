@@ -1,7 +1,7 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { supabase } from "@lib/supabase";
 import { Link, Stack, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Keyboard,
@@ -29,7 +29,6 @@ const cleanPhone = (v: string) =>
 
 const isValidEmail = (email: string) => {
   const e = String(email ?? "").trim();
-  // simple, good-enough
   return e.length >= 6 && e.includes("@") && e.includes(".");
 };
 
@@ -65,6 +64,14 @@ const SignUpScreen = () => {
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
+  // ✅ prevent double-alert in same action
+  const alertedRef = useRef(false);
+  const safeAlert = (title: string, msg: string) => {
+    if (alertedRef.current) return;
+    alertedRef.current = true;
+    Alert.alert(title, msg);
+  };
+
   useEffect(() => {
     const showSub = Keyboard.addListener("keyboardDidShow", () =>
       setKeyboardVisible(true)
@@ -91,14 +98,17 @@ const SignUpScreen = () => {
   }, [fullName, email, phone, password, confirmPassword, loading]);
 
   async function signUpWithEmail() {
+    alertedRef.current = false;
+
     const name = fullName.trim();
     const e = email.trim();
     const p = password.trim();
     const cp = confirmPassword.trim();
     const ph = cleanPhone(phone);
 
+    // ✅ validations (no loading toggles here)
     if (!name || !e || !ph || !p || !cp) {
-      Alert.alert(
+      safeAlert(
         "تنبيه",
         "من فضلك اكتب الاسم الثلاثي والبريد الإلكتروني ورقم الهاتف وكلمة المرور وتأكيدها."
       );
@@ -106,39 +116,38 @@ const SignUpScreen = () => {
     }
 
     if (!isValidEmail(e)) {
-      Alert.alert("تنبيه", "البريد الإلكتروني غير صحيح.");
+      safeAlert("تنبيه", "البريد الإلكتروني غير صحيح.");
       return;
     }
 
     if (ph.length < 8) {
-      Alert.alert("تنبيه", "رقم الهاتف غير صحيح.");
+      safeAlert("تنبيه", "رقم الهاتف غير صحيح.");
       return;
     }
 
     if (p.length < 6) {
-      Alert.alert("تنبيه", "كلمة المرور يجب ألا تقل عن 6 أحرف.");
+      safeAlert("تنبيه", "كلمة المرور يجب ألا تقل عن 6 أحرف.");
       return;
     }
 
     if (p !== cp) {
-      Alert.alert("تنبيه", "كلمة المرور وتأكيد كلمة المرور غير متطابقين.");
+      safeAlert("تنبيه", "كلمة المرور وتأكيد كلمة المرور غير متطابقين.");
       return;
     }
 
     setLoading(true);
-
     try {
       // ✅ 0) Pre-check phone BEFORE creating auth user
       const available = await isPhoneAvailable(ph);
       if (!available) {
-        Alert.alert(
+        safeAlert(
           "رقم الهاتف مسجّل",
           "توقف تسجيل الحساب لأن الرقم مسجل من قبل. جرّب رقم آخر أو سجّل دخول."
         );
         return;
       }
 
-      // ✅ 1) Sign up (NO role)
+      // ✅ 1) Sign up (NO role) — trigger will create profiles row
       const { data, error } = await supabase.auth.signUp({
         email: e,
         password: p,
@@ -151,53 +160,41 @@ const SignUpScreen = () => {
       });
 
       if (error) {
-        Alert.alert("خطأ", error.message);
+        const msg = String(error.message ?? "");
+
+        // ✅ try mapping trigger errors (if they surface)
+        if (msg.includes("PHONE_REQUIRED")) {
+          safeAlert("تنبيه", "رقم الهاتف مطلوب لإكمال إنشاء الحساب.");
+          return;
+        }
+        if (
+          msg.includes("PHONE_EXISTS") ||
+          msg.toLowerCase().includes("duplicate")
+        ) {
+          safeAlert(
+            "رقم الهاتف مسجّل",
+            "الرقم مسجل من قبل. جرّب رقم آخر أو سجّل دخول."
+          );
+          return;
+        }
+
+        safeAlert("خطأ", msg);
         return;
       }
 
-      const userId = data.user?.id ?? data.session?.user?.id ?? null;
-
-      /**
-       * ✅ 2) If session exists => user is logged-in immediately (email confirm OFF)
-       * We can safely upsert profile to ensure it exists and has full_name/phone.
-       *
-       * If session is null (email confirm ON) => DO NOT touch profiles from client now.
-       * Your DB trigger should create the profile row. AuthProvider will also fallback later.
-       */
-      if (data.session && userId) {
-        const { error: upsertErr } = await supabase.from("profiles").upsert(
-          {
-            id: userId,
-            full_name: name, // keep string (your types expect non-null)
-            phone: ph,
-            // ❌ don't send role
-          },
-          { onConflict: "id" }
-        );
-
-        if (upsertErr) {
-          console.log("[profiles upsert] error:", upsertErr.message);
-          Alert.alert(
-            "تم إنشاء الحساب",
-            "الحساب اتعمل، لكن حصلت مشكلة بسيطة في حفظ البيانات الإضافية. يمكنك تعديلها من صفحة البروفايل."
-          );
-          // continue anyway
-        }
-      }
-
-      // ✅ 3) UX message + route
+      // ✅ 2) UX message + route
       if (!data.session) {
-        Alert.alert(
+        safeAlert(
           "تم إنشاء الحساب",
           "تم إنشاء الحساب بنجاح ✅\nلو تفعيل البريد مفعّل، يرجى فحص البريد الإلكتروني ثم تسجيل الدخول."
         );
         router.replace("/sign-in");
       } else {
-        Alert.alert("تم", "تم إنشاء الحساب بنجاح ✅");
+        safeAlert("تم", "تم إنشاء الحساب بنجاح ✅");
         router.replace("/(user)/home");
       }
     } catch (err: any) {
-      Alert.alert("خطأ", err?.message ?? "حدث خطأ غير متوقع");
+      safeAlert("خطأ", err?.message ?? "حدث خطأ غير متوقع");
     } finally {
       setLoading(false);
     }
@@ -301,7 +298,6 @@ const SignUpScreen = () => {
 
           <View style={styles.field}>
             <Text style={styles.label}>كلمة المرور</Text>
-
             <View style={styles.inputWrapperSurface}>
               <TextInput
                 value={password}
@@ -335,7 +331,6 @@ const SignUpScreen = () => {
 
           <View style={styles.field}>
             <Text style={styles.label}>تأكيد كلمة المرور</Text>
-
             <View style={styles.inputWrapperSurface}>
               <TextInput
                 value={confirmPassword}
@@ -379,7 +374,7 @@ const SignUpScreen = () => {
           <Button
             onPress={signUpWithEmail}
             disabled={!canSubmit}
-            text={loading ? "جاري إنشاء الحساب..." : "إنشاء  الحساب "}
+            text={loading ? "جاري إنشاء الحساب..." : "إنشاء الحساب"}
           />
 
           <View style={styles.dividerRow}>
@@ -412,8 +407,6 @@ type Styles = {
   containerTop: ViewStyle;
 
   hero: ViewStyle;
-  heroIconWrap: ViewStyle;
-  appName: TextStyle;
   heroTitle: TextStyle;
   heroSubtitle: TextStyle;
 
@@ -424,7 +417,6 @@ type Styles = {
   label: TextStyle;
 
   inputWrapperSurface: ViewStyle;
-  inputWrap: ViewStyle;
   input: TextStyle;
   inputRtl: TextStyle;
   inputEmail: TextStyle;
@@ -433,7 +425,6 @@ type Styles = {
   leadingIcon: TextStyle;
   eyeBtn: ViewStyle;
 
-  dividerSoft: ViewStyle;
   dividerRow: ViewStyle;
   divider: ViewStyle;
   dividerText: TextStyle;
@@ -462,33 +453,10 @@ const styles = StyleSheet.create<Styles>({
     flexGrow: 1,
     gap: 18,
   },
-  containerCenter: {
-    justifyContent: "flex-start",
-  },
-  containerTop: {
-    justifyContent: "flex-start",
-    paddingTop: 24,
-  },
+  containerCenter: { justifyContent: "flex-start" },
+  containerTop: { justifyContent: "flex-start", paddingTop: 24 },
 
-  hero: {
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-  heroIconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 999,
-    backgroundColor: "#E5EDFF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
-  appName: {
-    fontSize: 13,
-    color: THEME.gray[200],
-    fontFamily: FONT.medium,
-  },
+  hero: { alignItems: "center", gap: 8, marginBottom: 8 },
   heroTitle: {
     fontSize: 20,
     color: THEME.white.DEFAULT,
@@ -543,11 +511,6 @@ const styles = StyleSheet.create<Styles>({
     paddingHorizontal: 12,
   },
 
-  inputWrap: {
-    position: "relative",
-    width: "100%",
-  },
-
   input: {
     flex: 1,
     paddingVertical: 12,
@@ -556,26 +519,13 @@ const styles = StyleSheet.create<Styles>({
     fontFamily: FONT.regular,
   },
 
-  inputRtl: {
-    textAlign: "right",
-  },
+  inputRtl: { textAlign: "right" },
+  inputEmail: { textAlign: "right" },
 
-  inputEmail: {
-    textAlign: "right",
-  },
+  inputWithLeading: { paddingLeft: 4 },
+  inputWithTrailing: { paddingLeft: 40 },
 
-  inputWithLeading: {
-    paddingLeft: 4,
-  },
-
-  inputWithTrailing: {
-    paddingLeft: 40,
-  },
-
-  leadingIcon: {
-    marginLeft: 8,
-    marginRight: 6,
-  },
+  leadingIcon: { marginLeft: 8, marginRight: 6 },
 
   eyeBtn: {
     position: "absolute",
@@ -586,32 +536,20 @@ const styles = StyleSheet.create<Styles>({
     alignItems: "center",
   },
 
-  dividerSoft: {
-    height: 1,
-    backgroundColor: "#E5E7EB",
-    marginVertical: 4,
-  },
-
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     marginTop: 8,
   },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E5E7EB",
-  },
+  divider: { flex: 1, height: 1, backgroundColor: "#E5E7EB" },
   dividerText: {
     fontSize: 12,
     color: THEME.gray[100],
     fontFamily: FONT.medium,
   },
 
-  helperRow: {
-    alignItems: "flex-end",
-  },
+  helperRow: { alignItems: "flex-end" },
   helperPill: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -627,11 +565,7 @@ const styles = StyleSheet.create<Styles>({
     borderRadius: 999,
     backgroundColor: THEME.primary,
   },
-  helperText: {
-    fontSize: 11,
-    color: THEME.gray[200],
-    fontFamily: FONT.medium,
-  },
+  helperText: { fontSize: 11, color: THEME.gray[200], fontFamily: FONT.medium },
 
   linkBtn: {
     borderRadius: 16,
