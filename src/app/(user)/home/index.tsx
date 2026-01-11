@@ -63,9 +63,7 @@ function applyFilters(args: {
   const typeFiltered =
     type === "الكل"
       ? list
-      : list.filter(
-          (p: any) => normalize(p?.property_type) === normalize(type)
-        );
+      : list.filter((p: any) => normalize(p?.property_type) === normalize(type));
 
   const q = normalize(query);
   const searched =
@@ -110,9 +108,17 @@ function pickLatest(list: PropertyRow[], n = 12) {
     .slice(0, n);
 }
 
+// ✅ IMPROVED: pick type rail sorted by latest too
 function pickType(list: PropertyRow[], type: PropertyType, n = 12) {
   const t = normalize(type);
-  return list.filter((p: any) => normalize(p?.property_type) === t).slice(0, n);
+  return [...list]
+    .filter((p: any) => normalize(p?.property_type) === t)
+    .sort(
+      (a: any, b: any) =>
+        new Date(b?.created_at ?? 0).getTime() -
+        new Date(a?.created_at ?? 0).getTime()
+    )
+    .slice(0, n);
 }
 
 type UIColors = {
@@ -141,7 +147,16 @@ export default function HomeScreen() {
       primary: theme.colors.primary,
       error: theme.colors.error,
     }),
-    [theme]
+    [
+      theme.scheme,
+      theme.colors.bg,
+      theme.colors.surface,
+      theme.colors.text,
+      theme.colors.muted,
+      theme.colors.border,
+      theme.colors.primary,
+      theme.colors.error,
+    ]
   );
 
   const { styles, tokens } = useMemo(
@@ -215,12 +230,6 @@ export default function HomeScreen() {
     [data]
   );
 
-  // ✅ (Optional) debug: see actual types in DB
-  // useEffect(() => {
-  //   const set = new Set(list.map((p: any) => p?.property_type).filter(Boolean));
-  //   console.log("DB property_type values:", Array.from(set));
-  // }, [list]);
-
   const filtered = useMemo(() => {
     return applyFilters({
       list,
@@ -256,7 +265,12 @@ export default function HomeScreen() {
     refetch();
   }, [refetch]);
 
-  // ✅ IMPORTANT FIX: build rails for ALL property types (not only first 3)
+  const chipData = useMemo(
+    () => ["الكل", ...PROPERTY_TYPES] as FilterType[],
+    []
+  );
+
+  // ✅ IMPORTANT: rails for ALL property types (and sorted)
   const rails = useMemo(() => {
     const latest = pickLatest(list, 12);
 
@@ -425,11 +439,12 @@ export default function HomeScreen() {
 
           {/* Chips */}
           <FlatList
-            data={["الكل", ...PROPERTY_TYPES] as FilterType[]}
+            data={chipData}
             keyExtractor={(item) => String(item)}
             horizontal
             inverted
             showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.chipsRow}
             renderItem={({ item }) => (
               <TypeChip
@@ -464,6 +479,7 @@ export default function HomeScreen() {
           data={filtered}
           keyExtractor={(item, index) => String((item as any)?.id ?? index)}
           numColumns={2}
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => {
             if (!item) return null;
             const id = String((item as any).id);
@@ -515,6 +531,12 @@ export default function HomeScreen() {
           }
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           ListFooterComponent={<View style={{ height: 16 }} />}
+          // perf
+          removeClippedSubviews
+          windowSize={9}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          updateCellsBatchingPeriod={30}
         />
       ) : (
         <FlatList
@@ -522,6 +544,7 @@ export default function HomeScreen() {
           data={rails}
           keyExtractor={(s) => s.key}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
               refreshing={!!isFetching}
@@ -553,6 +576,12 @@ export default function HomeScreen() {
             );
           }}
           ListFooterComponent={<View style={{ height: 10 }} />}
+          // perf
+          removeClippedSubviews
+          windowSize={7}
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          updateCellsBatchingPeriod={40}
         />
       )}
 

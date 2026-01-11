@@ -19,7 +19,14 @@ import { randomUUID } from "expo-crypto";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import React, { memo, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import React, {
+  memo,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   Image,
@@ -100,7 +107,6 @@ function getImagesMediaTypes(): any {
   return ["images"];
 }
 
-
 function isRlsError(err: any) {
   const msg = String(err?.message ?? "").toLowerCase();
   return msg.includes("row-level security") || msg.includes("rls");
@@ -116,7 +122,8 @@ async function ensurePhotoPermission(): Promise<boolean> {
   const perm = await ImagePicker.getMediaLibraryPermissionsAsync();
 
   // iOS: limited = allowed
-  if ((perm as any)?.granted || (perm as any)?.status === "limited") return true;
+  if ((perm as any)?.granted || (perm as any)?.status === "limited")
+    return true;
 
   if (!(perm as any)?.canAskAgain) {
     Alert.alert(
@@ -417,7 +424,9 @@ const StatusSelector = memo(function StatusSelector({
               disabled={loading}
               accessibilityLabel={`حالة العقار: ${label}`}
             >
-              <Text style={[ui.statusText, active ? ui.statusTextActive : null]}>
+              <Text
+                style={[ui.statusText, active ? ui.statusTextActive : null]}
+              >
                 {label}
               </Text>
             </Pressable>
@@ -524,7 +533,8 @@ export default function CreatePropertyScreen() {
     dispatchForm({
       type: "UPDATE_FIELD",
       field: "price",
-      value: updatingProperty.price != null ? String(updatingProperty.price) : "",
+      value:
+        updatingProperty.price != null ? String(updatingProperty.price) : "",
     });
     dispatchForm({
       type: "UPDATE_FIELD",
@@ -543,16 +553,24 @@ export default function CreatePropertyScreen() {
     });
 
     const bedrooms =
-      updatingProperty.bedrooms != null ? String(updatingProperty.bedrooms) : "";
+      updatingProperty.bedrooms != null
+        ? String(updatingProperty.bedrooms)
+        : "";
     const bathrooms =
       updatingProperty.bathrooms != null
         ? String(updatingProperty.bathrooms)
         : "";
     const area =
-      updatingProperty.area_sqm != null ? String(updatingProperty.area_sqm) : "";
+      updatingProperty.area_sqm != null
+        ? String(updatingProperty.area_sqm)
+        : "";
 
     dispatchForm({ type: "UPDATE_FIELD", field: "bedrooms", value: bedrooms });
-    dispatchForm({ type: "UPDATE_FIELD", field: "bathrooms", value: bathrooms });
+    dispatchForm({
+      type: "UPDATE_FIELD",
+      field: "bathrooms",
+      value: bathrooms,
+    });
     dispatchForm({ type: "UPDATE_FIELD", field: "area", value: area });
 
     if (
@@ -566,9 +584,13 @@ export default function CreatePropertyScreen() {
     dispatchForm({
       type: "UPDATE_FIELD",
       field: "propertyType",
-      value: (PROPERTY_TYPES.includes(updatingProperty.property_type as any)
-        ? updatingProperty.property_type
-        : PROPERTY_TYPES?.[0] ?? "شقة") as PropertyType,
+      value: (PROPERTY_TYPES.find(
+        (t) =>
+          String(t).trim() ===
+          String(updatingProperty?.property_type ?? "").trim()
+      ) ??
+        PROPERTY_TYPES[0] ??
+        "شقة") as PropertyType,
     });
 
     dispatchForm({
@@ -654,7 +676,8 @@ export default function CreatePropertyScreen() {
 
     const title = formData.title.trim();
     if (!title) newErrors.push("عنوان العقار مطلوب");
-    if (title.length > 100) newErrors.push("العنوان طويل جدًا (حد أقصى 100 حرف)");
+    if (title.length > 100)
+      newErrors.push("العنوان طويل جدًا (حد أقصى 100 حرف)");
 
     const p = toFloatOrNull(formData.price);
     if (!formData.price.trim()) newErrors.push("السعر مطلوب");
@@ -710,7 +733,9 @@ export default function CreatePropertyScreen() {
     if (!selected?.uri) return;
 
     try {
-      const info = await FileSystem.getInfoAsync(selected.uri, { size: true } as any);
+      const info = await FileSystem.getInfoAsync(selected.uri, {
+        size: true,
+      } as any);
       const size = (info as any)?.size as number | undefined;
       if (typeof size === "number" && size > MAX_IMAGE_BYTES) {
         Alert.alert("خطأ", "الصورة كبيرة جدًا. اختر صورة أقل من 7MB.");
@@ -875,7 +900,9 @@ export default function CreatePropertyScreen() {
   };
 
   const syncPropertyImages = async (propertyId: string) => {
-    const hasNewLocal = extraImages.some((x) => isLocalUri(x) || x.startsWith("content://"));
+    const hasNewLocal = extraImages.some(
+      (x) => isLocalUri(x) || x.startsWith("content://")
+    );
 
     if (isUpdating && !didLoadImages && !hasNewLocal) return;
     if (isUpdating && imagesLoadError && !hasNewLocal) return;
@@ -896,7 +923,9 @@ export default function CreatePropertyScreen() {
       sort_order: idx,
     }));
 
-    const { error: insErr } = await supabase.from("property_images").insert(rows);
+    const { error: insErr } = await supabase
+      .from("property_images")
+      .insert(rows);
     if (insErr) throw new Error(insErr.message);
   };
 
@@ -908,7 +937,11 @@ export default function CreatePropertyScreen() {
       setLoading(true);
 
       let coverPath: string | null = null;
-      if ((isLocalUri(formData.coverImage) || String(formData.coverImage ?? "").startsWith("content://")) && formData.coverImage) {
+      if (
+        (isLocalUri(formData.coverImage) ||
+          String(formData.coverImage ?? "").startsWith("content://")) &&
+        formData.coverImage
+      ) {
         coverPath = await uploadImage(formData.coverImage);
       }
 
@@ -928,7 +961,10 @@ export default function CreatePropertyScreen() {
               title: payload.title,
               city: payload.city ?? null,
             }).catch((e: any) =>
-              console.log("[push] broadcast property failed:", e?.message ?? String(e))
+              console.log(
+                "[push] broadcast property failed:",
+                e?.message ?? String(e)
+              )
             );
 
             resetFields();
@@ -1069,10 +1105,16 @@ export default function CreatePropertyScreen() {
               ]}
               accessibilityLabel="اختيار صورة الغلاف"
             >
-              <Image source={imageSourceForPreview} style={ui.image} resizeMode="cover" />
+              <Image
+                source={imageSourceForPreview}
+                style={ui.image}
+                resizeMode="cover"
+              />
               <View style={ui.imageOverlay}>
                 <Text style={ui.imageOverlayText}>
-                  {formData.coverImage ? "تغيير صورة الغلاف" : "اختيار صورة غلاف"}
+                  {formData.coverImage
+                    ? "تغيير صورة الغلاف"
+                    : "اختيار صورة غلاف"}
                 </Text>
               </View>
             </Pressable>
@@ -1118,7 +1160,11 @@ export default function CreatePropertyScreen() {
                   >
                     {extraThumbs.map((it) => (
                       <View key={it.key} style={ui.thumbWrap}>
-                        <Image source={{ uri: it.uri }} style={ui.thumb} resizeMode="cover" />
+                        <Image
+                          source={{ uri: it.uri }}
+                          style={ui.thumb}
+                          resizeMode="cover"
+                        />
                         <Pressable
                           onPress={() => removeExtraImage(it.raw)}
                           style={ui.thumbRemove}
@@ -1158,7 +1204,11 @@ export default function CreatePropertyScreen() {
               label="وصف (اختياري)"
               value={formData.description}
               onChangeText={(v) =>
-                dispatchForm({ type: "UPDATE_FIELD", field: "description", value: v })
+                dispatchForm({
+                  type: "UPDATE_FIELD",
+                  field: "description",
+                  value: v,
+                })
               }
               placeholder="اكتب وصف مختصر (المميزات – الدور – التشطيب...)"
               loading={loading}
@@ -1170,7 +1220,11 @@ export default function CreatePropertyScreen() {
               ui={ui}
               propertyType={formData.propertyType}
               setPropertyType={(v) =>
-                dispatchForm({ type: "UPDATE_FIELD", field: "propertyType", value: v })
+                dispatchForm({
+                  type: "UPDATE_FIELD",
+                  field: "propertyType",
+                  value: v,
+                })
               }
               loading={loading}
             />
@@ -1179,7 +1233,11 @@ export default function CreatePropertyScreen() {
               ui={ui}
               status={formData.status}
               setStatus={(v) =>
-                dispatchForm({ type: "UPDATE_FIELD", field: "status", value: v })
+                dispatchForm({
+                  type: "UPDATE_FIELD",
+                  field: "status",
+                  value: v,
+                })
               }
               loading={loading}
             />
@@ -1213,7 +1271,11 @@ export default function CreatePropertyScreen() {
               label="العنوان (اختياري)"
               value={formData.address}
               onChangeText={(v) =>
-                dispatchForm({ type: "UPDATE_FIELD", field: "address", value: v })
+                dispatchForm({
+                  type: "UPDATE_FIELD",
+                  field: "address",
+                  value: v,
+                })
               }
               placeholder="مثال: شارع النيل، أمام المستشفى"
               loading={loading}
@@ -1245,7 +1307,11 @@ export default function CreatePropertyScreen() {
                   label="اسم صاحب العقار (اختياري)"
                   value={formData.ownerName}
                   onChangeText={(v) =>
-                    dispatchForm({ type: "UPDATE_FIELD", field: "ownerName", value: v })
+                    dispatchForm({
+                      type: "UPDATE_FIELD",
+                      field: "ownerName",
+                      value: v,
+                    })
                   }
                   placeholder="مثال: أحمد محمد"
                   loading={loading}
@@ -1257,7 +1323,11 @@ export default function CreatePropertyScreen() {
                   label="رقم الموبايل (اختياري)"
                   value={formData.ownerPhone}
                   onChangeText={(v) =>
-                    dispatchForm({ type: "UPDATE_FIELD", field: "ownerPhone", value: v })
+                    dispatchForm({
+                      type: "UPDATE_FIELD",
+                      field: "ownerPhone",
+                      value: v,
+                    })
                   }
                   placeholder="مثال: 01012345678"
                   loading={loading}
@@ -1293,7 +1363,11 @@ export default function CreatePropertyScreen() {
                     label="غرف"
                     value={formData.bedrooms}
                     onChangeText={(v) =>
-                      dispatchForm({ type: "UPDATE_FIELD", field: "bedrooms", value: v })
+                      dispatchForm({
+                        type: "UPDATE_FIELD",
+                        field: "bedrooms",
+                        value: v,
+                      })
                     }
                     placeholder="مثال: 3"
                     loading={loading}
@@ -1308,7 +1382,11 @@ export default function CreatePropertyScreen() {
                     label="حمامات"
                     value={formData.bathrooms}
                     onChangeText={(v) =>
-                      dispatchForm({ type: "UPDATE_FIELD", field: "bathrooms", value: v })
+                      dispatchForm({
+                        type: "UPDATE_FIELD",
+                        field: "bathrooms",
+                        value: v,
+                      })
                     }
                     placeholder="مثال: 2"
                     loading={loading}
@@ -1323,7 +1401,11 @@ export default function CreatePropertyScreen() {
                     label="مساحة (م²)"
                     value={formData.area}
                     onChangeText={(v) =>
-                      dispatchForm({ type: "UPDATE_FIELD", field: "area", value: v })
+                      dispatchForm({
+                        type: "UPDATE_FIELD",
+                        field: "area",
+                        value: v,
+                      })
                     }
                     placeholder="مثال: 140"
                     loading={loading}
@@ -1345,7 +1427,13 @@ export default function CreatePropertyScreen() {
 
             <Button
               onPress={onSubmit}
-              text={loading ? "جاري الحفظ..." : isUpdating ? "تحديث العقار" : "إضافة العقار"}
+              text={
+                loading
+                  ? "جاري الحفظ..."
+                  : isUpdating
+                  ? "تحديث العقار"
+                  : "إضافة العقار"
+              }
               disabled={loading}
             />
 

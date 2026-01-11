@@ -1,6 +1,6 @@
 // src/api/properties.ts
-import { supabase } from "@lib/supabase";
 import { THEME } from "@constants/Colors";
+import { supabase } from "@lib/supabase";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 type PgErrorLike = {
@@ -18,8 +18,15 @@ const toThrowingError = (e: PgErrorLike): Error => {
   return err;
 };
 
-// ✅ Property Types
-export const PROPERTY_TYPES = ["شقة", "محل", "مخزن", "أرض", "غير ذلك"] as const;
+export const PROPERTY_TYPES = [
+  "شقة",
+  "محل",
+  "مخزن",
+  "أرض",
+  "سكن طلبة",
+  "غير ذلك",
+] as const;
+
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
 // ✅ DB status values (ENGLISH)
