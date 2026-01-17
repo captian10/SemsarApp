@@ -12,7 +12,6 @@ A modern **Real Estate Marketplace** mobile application built with **React Nativ
 ## 🧰 Tech Stack
 - React Native (Expo)
 - TypeScript
-- Tailwind CSS (UI styling)
 - Supabase (Auth, Database, Storage)
 - Git & GitHub
 
