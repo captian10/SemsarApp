@@ -15,3 +15,5 @@ A modern **Real Estate Marketplace** mobile application built with **React Nativ
 - Tailwind CSS (UI styling)
 - Supabase (Auth, Database, Storage)
 - Git & GitHub
+
+<img width="1600" height="920" alt="خلفية تطبيق سمسار" src="https://github.com/user-attachments/assets/5d6ba0ba-8b24-41fd-bfc5-9f003089e8c9" />
