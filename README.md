@@ -1,4 +1,4 @@
-# SemsarApp 🏠
+# SemsarApp 
 
 A real estate marketplace mobile application built with **React Native**, **Expo**, **TypeScript**, and **Supabase**.
 
