@@ -1,7 +1,7 @@
-# SemsarApp 🏠📱
+# SemsarApp 
 A modern **Real Estate Marketplace** mobile application built with **React Native + TypeScript** and powered by **Supabase**.
 
-## 🚀 Features
+## Features
 - Browse property listings
 - Property details with images
 - Authentication (Login / Signup)
@@ -9,7 +9,7 @@ A modern **Real Estate Marketplace** mobile application built with **React Nativ
 - Clean UI with reusable components
 - Supabase backend integration (Auth + Database + Storage)
 
-## 🧰 Tech Stack
+## Tech Stack
 - React Native (Expo)
 - TypeScript
 - Supabase (Auth, Database, Storage)
